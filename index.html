@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Restaurant Financial Simulator</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin:25px; background:#f7f3ee; color:#222; }
+    h1 { color:#7a1f16; }
+    .grid { display:grid; grid-template-columns:repeat(3,1fr); gap:15px; }
+    .card { background:white; padding:15px; border-radius:12px; box-shadow:0 2px 8px #ddd; }
+    label { display:block; margin-top:10px; font-size:13px; }
+    input { width:100%; box-sizing:border-box; }
+    input[type="range"] { margin-top:6px; }
+    button { margin-top:15px; padding:10px 18px; background:#7a1f16; color:white; border:0; border-radius:8px; cursor:pointer; }
+    .timeframeButtons { display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; }
+    .timeframeBtn { background:#d8c3ad; color:#222; }
+    .timeframeBtn.active { background:#7a1f16; color:white; font-weight:bold; }
+    .result { font-size:24px; font-weight:bold; color:#7a1f16; }
+    canvas { background:white; border-radius:12px; margin-top:20px; box-shadow:0 2px 8px #ddd; }
+    .small { font-size:12px; color:#555; }
+    .monthGrid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+    .seasonLabel { font-weight:bold; font-size:12px; margin-top:4px; }
+    .sectionHeader { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+    .toggleBtn { margin-top:0; padding:8px 14px; background:#d8c3ad; color:#222; }
+    .dollarHint { display:block; font-size:12px; color:#7a1f16; margin-top:3px; font-weight:bold; }
+  </style>
+</head>
+
+<body>
+
+<h1>Restaurant Financial Simulator</h1>
+
+<div class="card" style="margin-bottom:20px;">
+  <h3>Display Timeframe</h3>
+  <div class="timeframeButtons">
+    <button type="button" id="tf_day" class="timeframeBtn" onclick="setTimeframe('day')">Day</button>
+    <button type="button" id="tf_week" class="timeframeBtn" onclick="setTimeframe('week')">Week</button>
+    <button type="button" id="tf_month" class="timeframeBtn active" onclick="setTimeframe('month')">Month</button>
+    <button type="button" id="tf_year" class="timeframeBtn" onclick="setTimeframe('year')">Year</button>
+  </div>
+  <p class="small">The simulator calculates a monthly base first, then adjusts all displayed values to the selected timeframe.</p>
+</div>
+
+<div class="grid">
+  <div class="card">
+    <h3>Capacity & Revenue</h3>
+
+    <label>Seating Capacity: <b id="insideVal">48</b></label>
+    <input id="inside" type="range" min="0" max="150" step="1" value="48" oninput="syncSlider('inside'); calculate();">
+
+    <label>Turns Per Night: <b id="turnsVal">1.5</b></label>
+    <input id="turns" type="range" min="0.5" max="4" step="0.05" value="1.5" oninput="syncSlider('turns'); calculate();">
+
+    <label>Average Check: <b id="avgCheckVal">$90</b></label>
+    <input id="avgCheck" type="range" min="25" max="250" step="1" value="90" oninput="syncMoneySlider('avgCheck'); calculate();">
+
+    <label>Days Open Per Month: <b id="daysVal">26</b></label>
+    <input id="days" type="range" min="1" max="31" step="1" value="26" oninput="syncSlider('days'); calculate();">
+  </div>
+
+  <div class="card">
+    <h3>Variable Costs</h3>
+
+    <label>COGS %: <b id="foodCostVal">30%</b><span class="dollarHint" id="foodCostDollarVal"></span></label>
+    <input id="foodCost" type="range" min="5" max="60" step="1" value="30" oninput="syncPercentSlider('foodCost'); calculate();">
+
+    <label>Beverage Cost %: <b id="bevCostVal">25%</b><span class="dollarHint" id="bevCostDollarVal"></span></label>
+    <input id="bevCost" type="range" min="5" max="60" step="1" value="25" oninput="syncPercentSlider('bevCost'); calculate();">
+
+    <label>Food Sales Mix %: <b id="foodMixVal">75%</b><span class="dollarHint" id="foodMixDollarVal"></span></label>
+    <input id="foodMix" type="range" min="0" max="100" step="1" value="75" oninput="syncPercentSlider('foodMix'); calculate();">
+
+    <label>BOH Fixed Payroll: <b id="bohPayrollVal">$20,000</b><span class="dollarHint" id="bohPayrollDollarVal"></span></label>
+    <input id="bohPayroll" type="range" min="0" max="100000" step="1" value="20000" oninput="syncMoneySlider('bohPayroll'); calculate();">
+
+    <label>FOH Minimum Paid Labor: <b id="fohMinLaborVal">$5,000</b><span class="dollarHint" id="fohMinLaborDollarVal"></span></label>
+    <input id="fohMinLabor" type="range" min="0" max="50000" step="1" value="5000" oninput="syncMoneySlider('fohMinLabor'); calculate();">
+
+    <label>Tips Collected % of Revenue: <b id="tipsPctVal">18.0%</b><span class="dollarHint" id="tipsPctDollarVal"></span></label>
+    <input id="tipsPct" type="range" min="0" max="30" step="1" value="18" oninput="syncPercentSlider('tipsPct'); calculate();">
+  </div>
+
+  <div class="card">
+    <h3>Fixed Monthly Costs</h3>
+
+    <label>Rent: <b id="rentVal">$12,000</b></label>
+    <input id="rent" type="range" min="0" max="50000" step="1" value="12000" oninput="syncMoneySlider('rent'); calculate();">
+
+    <label>Utilities: <b id="utilitiesVal">$3,500</b></label>
+    <input id="utilities" type="range" min="0" max="20000" step="1" value="3500" oninput="syncMoneySlider('utilities'); calculate();">
+
+    <label>Miscellaneous: <b id="miscVal">$5,500</b></label>
+    <input id="misc" type="range" min="0" max="50000" step="1" value="5500" oninput="syncMoneySlider('misc'); calculate();">
+  </div>
+</div>
+
+<button onclick="calculate()">Calculate</button>
+<button onclick="toggleExplanations()">Show / Hide Formulas</button>
+<button onclick="downloadData()">Download Data</button>
+<button onclick="document.getElementById('uploadDataFile').click()">Upload Data</button>
+<input id="uploadDataFile" type="file" accept="application/json,.json" style="display:none" onchange="uploadData(event)">
+<span id="dataStatus" class="small" style="margin-left:10px;"></span>
+
+<div class="grid" style="margin-top:20px;">
+  <div class="card"><h3><span id="revenueTitle">Monthly Revenue</span></h3><div class="result" id="monthlyRevenue"></div></div>
+  <div class="card"><h3><span id="profitTitle">Monthly Profit</span></h3><div class="result" id="monthlyProfit"></div></div>
+  <div class="card"><h3><span id="breakevenTitle">Monthly Breakeven Revenue</span></h3><div class="result" id="breakevenRevenue"></div></div>
+</div>
+
+<div class="card" style="margin-top:20px;">
+  <div class="sectionHeader">
+    <h3>What-If Sliders</h3>
+    <button type="button" class="toggleBtn" onclick="toggleSection('whatIfBody', 'whatIfToggle')" id="whatIfToggle">Hide</button>
+  </div>
+  <div id="whatIfBody">
+  <p class="small">Changing profit calculates the revenue needed. COGS scale automatically. Labor is split between BOH fixed payroll, FOH minimum paid labor, and tips collected as a percentage of revenue.</p>
+
+  <label>Revenue Target: <b id="revSliderVal"></b></label>
+  <input id="revSlider" type="range" min="25000" max="300000" step="1" oninput="setRevenueFromSlider()">
+
+  <label>COGS Target: <b id="cogsSliderVal"></b></label>
+  <input id="cogsSlider" type="range" min="5000" max="120000" step="1" oninput="setCOGSFromSlider()">
+
+  <label>Labor Target: <b id="laborSliderVal"></b></label>
+  <input id="laborSlider" type="range" min="5000" max="120000" step="1" oninput="setLaborFromSlider()">
+
+  <label>Fixed Cost Target: <b id="fixedSliderVal"></b></label>
+  <input id="fixedSlider" type="range" min="5000" max="80000" step="1" oninput="setFixedFromSlider()">
+
+  <label>Profit Target: <b id="profitSliderVal"></b></label>
+  <input id="profitSlider" type="range" min="-25000" max="100000" step="1" oninput="setProfitFromSlider()">
+  </div>
+</div>
+
+<div class="card" style="margin-top:20px;">
+  <div class="sectionHeader">
+    <h3>Seasonality Factor Sliders</h3>
+    <button type="button" class="toggleBtn" onclick="toggleSection('seasonBody', 'seasonToggle')" id="seasonToggle">Hide</button>
+  </div>
+  <div id="seasonBody">
+    <p class="small">1.00 means 100% of your base month. 0.60 means 60%. 1.20 means 120%. Sliders move in 0.01 increments for precise seasonality control.</p>
+    <div class="monthGrid" id="seasonControls"></div>
+  </div>
+</div>
+
+<div class="card" id="explanationBox" style="display:none; margin-top:20px;">
+  <h3>Full Explanations & Formulas</h3>
+  <div id="explanations"></div>
+</div>
+
+<canvas id="costChart" width="950" height="340"></canvas>
+<canvas id="seasonChart" width="950" height="370"></canvas>
+
+<script>
+let current = {};
+let selectedTimeframe = "month";
+
+const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+let seasonFactors = [1,1,1,0.95,0.75,0.60,0.55,0.55,0.60,0.65,0.80,1];
+
+function money(n) {
+  return "$" + Math.round(n).toLocaleString();
+}
+
+function pct(n) {
+  return (n * 100).toFixed(1) + "%";
+}
+
+function val(id) {
+  return Number(document.getElementById(id).value);
+}
+
+function getTimeframe() {
+  return selectedTimeframe;
+}
+
+function setTimeframe(tf) {
+  selectedTimeframe = tf;
+  updateTimeframeButtons();
+  calculate();
+}
+
+function updateTimeframeButtons() {
+  ["day", "week", "month", "year"].forEach(tf => {
+    const btn = document.getElementById("tf_" + tf);
+    if (btn) {
+      btn.classList.toggle("active", tf === selectedTimeframe);
+    }
+  });
+}
+
+function timeframeLabel() {
+  const tf = getTimeframe();
+  if (tf === "day") return "Daily";
+  if (tf === "week") return "Weekly";
+  if (tf === "year") return "Yearly";
+  return "Monthly";
+}
+
+function timeframeMultiplier() {
+  const tf = getTimeframe();
+  if (tf === "day") return 1 / 30.4375;
+  if (tf === "week") return 12 / 52;
+  if (tf === "year") return 12;
+  return 1;
+}
+
+function scaleForTimeframe(n) {
+  return n * timeframeMultiplier();
+}
+
+function syncSlider(id) {
+  document.getElementById(id + "Val").innerHTML = document.getElementById(id).value;
+}
+
+function syncMoneySlider(id) {
+  document.getElementById(id + "Val").innerHTML = money(Number(document.getElementById(id).value));
+}
+
+function syncPercentSlider(id) {
+  document.getElementById(id + "Val").innerHTML = Number(document.getElementById(id).value).toFixed(1) + "%";
+}
+
+function syncAllSliders() {
+  ["inside","turns","days"].forEach(syncSlider);
+  ["avgCheck","bohPayroll","fohMinLabor","rent","utilities","misc"].forEach(syncMoneySlider);
+  ["foodCost","bevCost","foodMix","tipsPct"].forEach(syncPercentSlider);
+}
+
+function getSeasonMeaning(factor) {
+  if (factor >= 1.10) return { text:"Surge / Premium Demand", color:"#6b46c1" };
+  if (factor >= 0.95) return { text:"Peak Season", color:"#2f855a" };
+  if (factor >= 0.75) return { text:"Shoulder Season", color:"#3182ce" };
+  if (factor >= 0.60) return { text:"Recovery / Soft Month", color:"#d69e2e" };
+  if (factor >= 0.45) return { text:"Low Season", color:"#dd6b20" };
+  return { text:"Danger Zone", color:"#c53030" };
+}
+
+function buildSeasonControls() {
+  const box = document.getElementById("seasonControls");
+  box.innerHTML = "";
+
+  months.forEach((m, i) => {
+    const meaning = getSeasonMeaning(seasonFactors[i]);
+    box.innerHTML += `
+      <div class="card">
+        <label><b>${m}</b> Factor: <span id="factorVal${i}">${seasonFactors[i].toFixed(2)}</span></label>
+        <input id="factor${i}" type="range" min="0.30" max="1.30" step="0.01" value="${seasonFactors[i]}" oninput="updateSeasonFactor(${i})">
+        <div id="factorLabel${i}" class="seasonLabel" style="color:${meaning.color};">${meaning.text}</div>
+      </div>
+    `;
+  });
+}
+
+function updateSeasonFactor(index) {
+  const value = Number(document.getElementById("factor" + index).value);
+  seasonFactors[index] = value;
+
+  const meaning = getSeasonMeaning(value);
+  document.getElementById("factorVal" + index).innerHTML = value.toFixed(2);
+  document.getElementById("factorLabel" + index).innerHTML = meaning.text;
+  document.getElementById("factorLabel" + index).style.color = meaning.color;
+
+  calculate();
+}
+
+function toggleSection(bodyId, buttonId) {
+  const body = document.getElementById(bodyId);
+  const button = document.getElementById(buttonId);
+
+  const isHidden = body.style.display === "none";
+  body.style.display = isHidden ? "block" : "none";
+  button.innerHTML = isHidden ? "Hide" : "Show";
+}
+
+function toggleExplanations() {
+  const box = document.getElementById("explanationBox");
+  box.style.display = box.style.display === "none" ? "block" : "none";
+}
+
+function getInputs() {
+  const inside = val("inside");
+  const turns = val("turns");
+  const avgCheck = val("avgCheck");
+  const days = val("days");
+
+  const foodCost = val("foodCost") / 100;
+  const bevCost = val("bevCost") / 100;
+  const foodMix = val("foodMix") / 100;
+  const bohPayroll = val("bohPayroll");
+  const fohMinLabor = val("fohMinLabor");
+  const tipsPct = val("tipsPct") / 100;
+
+  const rent = val("rent");
+  const utilities = val("utilities");
+  const misc = val("misc");
+
+  const seats = inside;
+  const coversPerNight = seats * turns;
+  const revenue = coversPerNight * avgCheck * days;
+
+  const blendedCOGS = (foodCost * foodMix) + (bevCost * (1 - foodMix));
+  const cogs = revenue * blendedCOGS;
+
+  const tipsCollected = revenue * tipsPct;
+  const fohLabor = fohMinLabor + tipsCollected;
+  const labor = bohPayroll + fohLabor;
+  const effectiveLaborPct = labor / revenue;
+
+  const fixed = rent + utilities + misc;
+  const expenses = cogs + labor + fixed;
+  const profit = revenue - expenses;
+
+  const contributionMargin = 1 - blendedCOGS - effectiveLaborPct;
+  const breakeven = fixed / contributionMargin;
+
+  return {
+    inside, turns, avgCheck, days,
+    foodCost, bevCost, foodMix, bohPayroll, fohMinLabor, tipsPct,
+    rent, utilities, misc,
+    seats, coversPerNight, revenue, blendedCOGS,
+    cogs, tipsCollected, fohLabor, labor, effectiveLaborPct,
+    fixed, expenses, profit, contributionMargin, breakeven
+  };
+}
+
+function calculate() {
+  current = getInputs();
+
+  const label = timeframeLabel();
+  const displayRevenue = scaleForTimeframe(current.revenue);
+  const displayCOGS = scaleForTimeframe(current.cogs);
+  const displayLabor = scaleForTimeframe(current.labor);
+  const displayFixed = scaleForTimeframe(current.fixed);
+  const displayProfit = scaleForTimeframe(current.profit);
+  const displayBreakeven = scaleForTimeframe(current.breakeven);
+
+  document.getElementById("revenueTitle").innerHTML = label + " Revenue";
+  document.getElementById("profitTitle").innerHTML = label + " Profit";
+  document.getElementById("breakevenTitle").innerHTML = label + " Breakeven Revenue";
+
+  document.getElementById("monthlyRevenue").innerHTML = money(displayRevenue);
+  document.getElementById("monthlyProfit").innerHTML = money(displayProfit);
+  document.getElementById("breakevenRevenue").innerHTML = money(displayBreakeven);
+
+  updateSliders();
+  updateVariableCostDollarDisplays();
+  updateExplanations();
+  drawCostChart(displayRevenue, displayCOGS, displayLabor, displayFixed, displayProfit, label);
+  drawSeasonChart(current.revenue, current.blendedCOGS, current.bohPayroll, current.fohMinLabor, current.tipsPct, current.fixed);
+}
+
+function updateSliders() {
+  document.getElementById("revSlider").value = current.revenue;
+  document.getElementById("cogsSlider").value = current.cogs;
+  document.getElementById("laborSlider").value = current.labor;
+  document.getElementById("fixedSlider").value = current.fixed;
+  document.getElementById("profitSlider").value = current.profit;
+
+  document.getElementById("revSliderVal").innerHTML = money(current.revenue);
+  document.getElementById("cogsSliderVal").innerHTML = money(current.cogs);
+  document.getElementById("laborSliderVal").innerHTML = money(current.labor);
+  document.getElementById("fixedSliderVal").innerHTML = money(current.fixed);
+  document.getElementById("profitSliderVal").innerHTML = money(current.profit);
+}
+
+
+function updateVariableCostDollarDisplays() {
+  const label = timeframeLabel();
+  const displayRevenue = scaleForTimeframe(current.revenue);
+
+  const displayedFoodRevenue = displayRevenue * current.foodMix;
+  const displayedBeverageRevenue = displayRevenue * (1 - current.foodMix);
+
+  const displayedFoodCOGS = displayedFoodRevenue * current.foodCost;
+  const displayedBeverageCOGS = displayedBeverageRevenue * current.bevCost;
+  const displayedBlendedCOGS = scaleForTimeframe(current.cogs);
+
+  const displayedBOH = scaleForTimeframe(current.bohPayroll);
+  const displayedFOHMin = scaleForTimeframe(current.fohMinLabor);
+  const displayedTips = scaleForTimeframe(current.tipsCollected);
+
+  document.getElementById("foodCostDollarVal").innerHTML = label + " COGS dollars: " + money(displayedBlendedCOGS) + " total | Food portion: " + money(displayedFoodCOGS);
+  document.getElementById("bevCostDollarVal").innerHTML = label + " beverage COGS dollars: " + money(displayedBeverageCOGS);
+  document.getElementById("foodMixDollarVal").innerHTML = label + " food sales base: " + money(displayedFoodRevenue) + " | Beverage sales base: " + money(displayedBeverageRevenue);
+  document.getElementById("bohPayrollDollarVal").innerHTML = label + " BOH payroll: " + money(displayedBOH);
+  document.getElementById("fohMinLaborDollarVal").innerHTML = label + " FOH minimum paid labor: " + money(displayedFOHMin);
+  document.getElementById("tipsPctDollarVal").innerHTML = label + " tips collected: " + money(displayedTips);
+}
+
+function updateExplanations() {
+  const label = timeframeLabel();
+  const multiplier = timeframeMultiplier();
+
+  document.getElementById("explanations").innerHTML = `
+    <h4>Selected Timeframe</h4>
+    <p>Current view = <b>${label}</b>. Monthly base values are multiplied by <b>${multiplier.toFixed(4)}</b>.</p>
+
+    <h4>Total Seats</h4>
+    <p>Seating capacity = <b>${current.seats}</b></p>
+
+    <h4>Covers Per Night</h4>
+    <p>${current.seats} seats × ${current.turns} turns = <b>${current.coversPerNight.toFixed(1)}</b></p>
+
+    <h4>Monthly Base Revenue</h4>
+    <p>${current.coversPerNight.toFixed(1)} covers × ${money(current.avgCheck)} average check × ${current.days} days = <b>${money(current.revenue)}</b></p>
+
+    <h4>${label} Displayed Revenue</h4>
+    <p>${money(current.revenue)} monthly base × ${multiplier.toFixed(4)} = <b>${money(scaleForTimeframe(current.revenue))}</b></p>
+
+    <h4>COGS</h4>
+    <p>Blended COGS = (${pct(current.foodCost)} × ${pct(current.foodMix)}) + (${pct(current.bevCost)} × ${pct(1-current.foodMix)}) = <b>${pct(current.blendedCOGS)}</b></p>
+
+    <h4>Labor Split</h4>
+    <p>BOH fixed payroll = <b>${money(current.bohPayroll)}</b> monthly base</p>
+    <p>FOH tips collected = ${money(current.revenue)} × ${pct(current.tipsPct)} = <b>${money(current.tipsCollected)}</b> monthly base</p>
+    <p>FOH labor = ${money(current.fohMinLabor)} minimum paid labor + ${money(current.tipsCollected)} tips collected = <b>${money(current.fohLabor)}</b> monthly base</p>
+    <p>Total labor = ${money(current.bohPayroll)} BOH + ${money(current.fohLabor)} FOH = <b>${money(current.labor)}</b> monthly base</p>
+    <p>${label} displayed labor = <b>${money(scaleForTimeframe(current.labor))}</b></p>
+
+    <h4>Profit</h4>
+    <p>Monthly base: ${money(current.revenue)} - ${money(current.cogs)} - ${money(current.labor)} - ${money(current.fixed)} = <b>${money(current.profit)}</b></p>
+    <p>${label} displayed profit = <b>${money(scaleForTimeframe(current.profit))}</b></p>
+
+    <h4>Seasonality</h4>
+    <p>Monthly seasonal revenue = Base Revenue × Month Factor.</p>
+  `;
+}
+
+function setRevenueFromSlider() {
+  const targetRevenue = val("revSlider");
+  current = getInputs();
+
+  const newAvgCheck = targetRevenue / (current.coversPerNight * current.days);
+  document.getElementById("avgCheck").value = newAvgCheck.toFixed(0);
+  syncMoneySlider("avgCheck");
+
+  calculate();
+}
+
+function setProfitFromSlider() {
+  const targetProfit = val("profitSlider");
+  current = getInputs();
+
+  const fixedLabor = current.bohPayroll + current.fohMinLabor;
+  let requiredRevenue = (targetProfit + current.fixed + fixedLabor) / (1 - current.blendedCOGS - current.tipsPct);
+
+  const newAvgCheck = requiredRevenue / (current.coversPerNight * current.days);
+  document.getElementById("avgCheck").value = newAvgCheck.toFixed(0);
+  syncMoneySlider("avgCheck");
+
+  calculate();
+}
+
+function setCOGSFromSlider() {
+  const targetCOGS = val("cogsSlider");
+  current = getInputs();
+
+  const newBlendedCOGS = targetCOGS / current.revenue;
+  const newFoodCost = (newBlendedCOGS - (current.bevCost * (1 - current.foodMix))) / current.foodMix;
+
+  document.getElementById("foodCost").value = Math.max(0, newFoodCost * 100).toFixed(1);
+  syncPercentSlider("foodCost");
+
+  calculate();
+}
+
+function setLaborFromSlider() {
+  const targetLabor = val("laborSlider");
+  current = getInputs();
+
+  // Keep FOH minimum labor and tips percentage unchanged.
+  // Adjust BOH fixed payroll to reach the selected total labor target when possible.
+  const requiredBOH = targetLabor - current.fohLabor;
+  document.getElementById("bohPayroll").value = Math.max(0, requiredBOH).toFixed(0);
+  syncMoneySlider("bohPayroll");
+
+  calculate();
+}
+
+function setFixedFromSlider() {
+  const targetFixed = val("fixedSlider");
+  current = getInputs();
+
+  const baseFixed = current.rent + current.utilities;
+  const newMisc = targetFixed - baseFixed;
+
+  document.getElementById("misc").value = Math.max(0, newMisc).toFixed(0);
+  syncMoneySlider("misc");
+
+  calculate();
+}
+
+function drawCostChart(revenue, cogs, labor, fixed, profit, label) {
+  const canvas = document.getElementById("costChart");
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  const data = [
+    ["Revenue", revenue, "#2f855a"],
+    ["COGS", cogs, "#d69e2e"],
+    ["Labor", labor, "#3182ce"],
+    ["Fixed", fixed, "#805ad5"],
+    ["Profit", profit, profit >= 0 ? "#2f855a" : "#c53030"]
+  ];
+
+  const max = Math.max(...data.map(d => Math.abs(d[1])));
+  const baseY = 260;
+
+  ctx.font = "14px Arial";
+  ctx.fillStyle = "#222";
+  ctx.fillText(label + " Financial Breakdown", 30, 25);
+
+  data.forEach((d, i) => {
+    const x = 70 + i * 170;
+    const h = Math.abs(d[1]) / max * 200;
+    const y = d[1] >= 0 ? baseY - h : baseY;
+
+    ctx.fillStyle = d[2];
+    ctx.fillRect(x, y, 90, h);
+
+    ctx.fillStyle = "#222";
+    ctx.fillText(d[0], x, 295);
+    ctx.fillText(money(d[1]), x - 5, y - 8);
+  });
+}
+
+function drawSeasonChart(baseRevenue, cogsPct, bohPayroll, fohMinLabor, tipsPct, fixedCosts) {
+  const canvas = document.getElementById("seasonChart");
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  const profits = seasonFactors.map(f => {
+    const rev = baseRevenue * f;
+    const cogs = rev * cogsPct;
+    const labor = bohPayroll + fohMinLabor + (rev * tipsPct);
+    return rev - cogs - labor - fixedCosts;
+  });
+
+  const max = Math.max(...profits.map(p => Math.abs(p)));
+  const baseY = 270;
+
+  ctx.font = "14px Arial";
+  ctx.fillStyle = "#222";
+  ctx.fillText("Seasonality Profit / Loss Projection", 30, 25);
+
+  ctx.strokeStyle = "#999";
+  ctx.beginPath();
+  ctx.moveTo(30, baseY);
+  ctx.lineTo(920, baseY);
+  ctx.stroke();
+
+  profits.forEach((profit, i) => {
+    const x = 38 + i * 74;
+    const h = Math.abs(profit) / max * 190;
+    const y = profit >= 0 ? baseY - h : baseY;
+    const meaning = getSeasonMeaning(seasonFactors[i]);
+
+    ctx.fillStyle = profit >= 0 ? "#2f855a" : "#c53030";
+    ctx.fillRect(x, y, 42, h);
+
+    ctx.fillStyle = "#222";
+    ctx.fillText(months[i], x, 305);
+    ctx.fillText(seasonFactors[i].toFixed(2), x, 323);
+
+    ctx.fillStyle = meaning.color;
+    ctx.fillText(money(profit), x - 14, profit >= 0 ? y - 8 : y + h + 15);
+  });
+}
+
+
+function collectAppData() {
+  const inputIds = [
+    "inside", "turns", "avgCheck", "days",
+    "foodCost", "bevCost", "foodMix", "bohPayroll", "fohMinLabor", "tipsPct",
+    "rent", "utilities", "misc"
+  ];
+
+  const inputs = {};
+  inputIds.forEach(id => {
+    inputs[id] = document.getElementById(id).value;
+  });
+
+  return {
+    appName: "Restaurant Financial Simulator",
+    version: "1.7",
+    savedAt: new Date().toISOString(),
+    timeframe: selectedTimeframe,
+    inputs: inputs,
+    seasonFactors: seasonFactors
+  };
+}
+
+function downloadData() {
+  const data = collectAppData();
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const dateStamp = new Date().toISOString().slice(0, 10);
+
+  a.href = url;
+  a.download = "restaurant-financial-simulator-data-" + dateStamp + ".json";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  showDataStatus("Data downloaded successfully.", false);
+}
+
+function uploadData(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+
+  reader.onload = function(e) {
+    try {
+      const data = JSON.parse(e.target.result);
+
+      if (!data.inputs || !Array.isArray(data.seasonFactors)) {
+        throw new Error("Invalid simulator data file.");
+      }
+
+      if (data.timeframe && ["day", "week", "month", "year"].includes(data.timeframe)) {
+        selectedTimeframe = data.timeframe;
+      }
+
+      Object.keys(data.inputs).forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = data.inputs[id];
+      });
+
+      if (data.seasonFactors.length === months.length) {
+        seasonFactors = data.seasonFactors.map(Number);
+      }
+
+      buildSeasonControls();
+      syncAllSliders();
+      calculate();
+
+      showDataStatus("Data uploaded successfully.", false);
+    } catch (err) {
+      showDataStatus("Upload failed: please select a valid JSON data file.", true);
+    }
+
+    event.target.value = "";
+  };
+
+  reader.readAsText(file);
+}
+
+function showDataStatus(message, isError) {
+  const status = document.getElementById("dataStatus");
+  status.innerHTML = message;
+  status.style.color = isError ? "#c53030" : "#2f855a";
+
+  setTimeout(() => {
+    status.innerHTML = "";
+  }, 4000);
+}
+
+buildSeasonControls();
+updateTimeframeButtons();
+syncAllSliders();
+calculate();
+</script>
+
+</body>
+</html>
