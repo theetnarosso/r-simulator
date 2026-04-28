@@ -1,66 +1,58 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#7a1f16">
   <title>Restaurant Financial Simulator</title>
   <style>
-    body { font-family: Arial, sans-serif; margin:25px; background:#f7f3ee; color:#222; }
-    h1 { color:#7a1f16; }
-    .grid { display:grid; grid-template-columns:repeat(3,1fr); gap:15px; }
-    .card { background:white; padding:15px; border-radius:12px; box-shadow:0 2px 8px #ddd; }
-    label { display:block; margin-top:10px; font-size:13px; }
-    input { width:100%; box-sizing:border-box; }
-    input[type="range"] { margin-top:6px; }
-    button { margin-top:15px; padding:10px 18px; background:#7a1f16; color:white; border:0; border-radius:8px; cursor:pointer; }
-    .timeframeButtons { display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; }
-    .timeframeBtn { background:#d8c3ad; color:#222; }
-    .timeframeBtn.active { background:#7a1f16; color:white; font-weight:bold; }
-    .result { font-size:24px; font-weight:bold; color:#7a1f16; }
-    canvas { background:white; border-radius:12px; margin-top:20px; box-shadow:0 2px 8px #ddd; }
-    .small { font-size:12px; color:#555; }
-    .monthGrid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+    :root { --etna-red:#7a1f16; --etna-cream:#f7f3ee; --etna-tan:#d8c3ad; --text:#222; --muted:#555; --card:#fff; --shadow:0 2px 8px rgba(0,0,0,.12); --radius:14px; }
+    * { box-sizing:border-box; }
+    html { -webkit-text-size-adjust:100%; scroll-behavior:smooth; }
+    body { font-family:Arial,sans-serif; margin:clamp(10px,2.2vw,25px); background:var(--etna-cream); color:var(--text); line-height:1.35; }
+    h1 { color:var(--etna-red); font-size:clamp(28px,5vw,42px); line-height:1.05; margin:0 0 18px; }
+    h3 { font-size:clamp(17px,2.6vw,22px); line-height:1.2; margin:0 0 10px; }
+    h4 { margin:16px 0 6px; }
+    p { margin:8px 0; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:clamp(12px,2vw,16px); align-items:start; }
+    .card { background:var(--card); padding:clamp(14px,2vw,18px); border-radius:var(--radius); box-shadow:var(--shadow); min-width:0; overflow-wrap:anywhere; }
+    label { display:block; margin-top:12px; font-size:clamp(13px,1.8vw,15px); }
+    input { width:100%; max-width:100%; }
+    input[type="range"] { margin-top:8px; height:38px; accent-color:var(--etna-red); touch-action:pan-y; }
+    button { margin-top:12px; padding:12px 18px; min-height:46px; background:var(--etna-red); color:white; border:0; border-radius:10px; cursor:pointer; font-size:15px; font-weight:600; touch-action:manipulation; }
+    button:active { transform:translateY(1px); }
+    .timeframeButtons { display:grid; grid-template-columns:repeat(4,minmax(90px,1fr)); gap:10px; margin-top:10px; }
+    .timeframeBtn { background:var(--etna-tan); color:#222; }
+    .timeframeBtn.active { background:var(--etna-red); color:white; font-weight:bold; }
+    .result { font-size:clamp(24px,5vw,34px); font-weight:bold; color:var(--etna-red); line-height:1.05; word-break:break-word; }
+    canvas { display:block; width:100%; max-width:100%; height:auto; background:white; border-radius:var(--radius); margin-top:20px; box-shadow:var(--shadow); }
+    .small { font-size:clamp(12px,1.7vw,14px); color:var(--muted); }
+    .monthGrid { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:12px; }
     .seasonLabel { font-weight:bold; font-size:12px; margin-top:4px; }
-    .sectionHeader { display:flex; justify-content:space-between; align-items:center; gap:10px; }
-    .toggleBtn { margin-top:0; padding:8px 14px; background:#d8c3ad; color:#222; }
-    .dollarHint { display:block; font-size:12px; color:#7a1f16; margin-top:3px; font-weight:bold; }
-    .truthBox { border-left:6px solid #2f855a; background:#ffffff; }
+    .sectionHeader { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
+    .toggleBtn { margin-top:0; padding:9px 14px; background:var(--etna-tan); color:#222; width:auto; }
+    .dollarHint { display:block; font-size:12px; color:var(--etna-red); margin-top:4px; font-weight:bold; line-height:1.3; }
+    .truthBox { border-left:6px solid #2f855a; background:#fff; }
     .warningBox { border-left:6px solid #d69e2e; background:#fffaf0; }
-    .pill { display:inline-block; padding:3px 8px; border-radius:999px; background:#f0e5d8; font-size:12px; font-weight:bold; color:#7a1f16; }
-    .flowGrid { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:15px; margin-top:20px; }
-    .flowCard { border-left:6px solid #d8c3ad; }
-    .flowValue { font-size:22px; font-weight:bold; color:#7a1f16; margin-top:8px; }
-    .switchRow { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:15px; padding:10px; background:#f7f3ee; border-radius:10px; }
-    .switch { position:relative; display:inline-block; width:58px; height:30px; flex:0 0 auto; }
+    .pill { display:inline-block; padding:3px 8px; border-radius:999px; background:#f0e5d8; font-size:12px; font-weight:bold; color:var(--etna-red); }
+    .flowGrid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:15px; margin-top:20px; }
+    .flowCard { border-left:6px solid var(--etna-tan); }
+    .flowValue { font-size:clamp(22px,4.8vw,30px); font-weight:bold; color:var(--etna-red); margin-top:8px; line-height:1.05; word-break:break-word; }
+    .summarySection { margin-top:20px; }
+    .summaryBody { display:block; }
+    .summaryToggleBtn { margin-top:0; padding:9px 14px; background:var(--etna-tan); color:#222; width:auto; }
+    @media (max-width:600px) { .summaryToggleBtn { width:100%; } }
+    .switchRow { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:15px; padding:12px; background:var(--etna-cream); border-radius:12px; }
+    .switch { position:relative; display:inline-block; width:62px; height:34px; flex:0 0 auto; }
     .switch input { opacity:0; width:0; height:0; }
-    .sliderSwitch { position:absolute; cursor:pointer; top:0; left:0; right:0; bottom:0; background:#ccc; transition:.2s; border-radius:30px; }
-    .sliderSwitch:before { position:absolute; content:""; height:22px; width:22px; left:4px; bottom:4px; background:white; transition:.2s; border-radius:50%; }
-    .switch input:checked + .sliderSwitch { background:#7a1f16; }
+    .sliderSwitch { position:absolute; cursor:pointer; inset:0; background:#ccc; transition:.2s; border-radius:34px; }
+    .sliderSwitch:before { position:absolute; content:""; height:26px; width:26px; left:4px; bottom:4px; background:white; transition:.2s; border-radius:50%; }
+    .switch input:checked + .sliderSwitch { background:var(--etna-red); }
     .switch input:checked + .sliderSwitch:before { transform:translateX(28px); }
-
-     (max-width: 900px) {
-      body { margin:14px; }
-      .grid, .flowGrid { grid-template-columns:1fr 1fr; }
-      .monthGrid { grid-template-columns:1fr 1fr; }
-      canvas { width:100%; height:auto; max-width:100%; }
-    }
-
-     (max-width: 600px) {
-      body { margin:10px; font-size:15px; }
-      h1 { font-size:28px; line-height:1.1; }
-      h3 { font-size:18px; line-height:1.2; margin:8px 0; }
-      .grid, .flowGrid, .monthGrid { grid-template-columns:1fr; gap:12px; }
-      .card { padding:14px; border-radius:14px; }
-      .result, .flowValue { font-size:28px; line-height:1.1; word-break:break-word; }
-      .timeframeButtons { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
-      button, .timeframeBtn, .toggleBtn { width:100%; min-height:44px; margin-top:8px; font-size:15px; }
-      input[type="range"] { height:34px; }
-      label { font-size:14px; }
-      .sectionHeader { align-items:flex-start; flex-direction:column; }
-      .switchRow { flex-direction:column; align-items:flex-start; }
-      .switch { align-self:flex-end; }
-      canvas { width:100%; height:auto; max-width:100%; }
-    }
-    </style>
+    img, svg, video { max-width:100%; height:auto; }
+    @media (max-width:900px) { body { margin:14px; } .timeframeButtons { grid-template-columns:repeat(2,1fr); } button { width:100%; } .toggleBtn { width:auto; min-width:110px; } }
+    @media (max-width:600px) { body { margin:10px; font-size:15px; } .grid,.flowGrid,.monthGrid { grid-template-columns:1fr; gap:12px; } .card { padding:14px; border-radius:14px; } .timeframeButtons { grid-template-columns:1fr 1fr; gap:8px; } button,.timeframeBtn,.toggleBtn { width:100%; min-height:48px; margin-top:8px; font-size:15px; } input[type="range"] { height:42px; } .sectionHeader { align-items:stretch; flex-direction:column; } .switchRow { flex-direction:column; align-items:stretch; } .switch { align-self:flex-end; } canvas { margin-top:14px; } #explanations { font-size:14px; } }
+    @media (max-width:380px) { .timeframeButtons { grid-template-columns:1fr; } h1 { font-size:26px; } .result,.flowValue { font-size:24px; } }
+</style>
 </head>
 
 <body>
@@ -155,38 +147,46 @@
 <input id="uploadDataFile" type="file" accept="application/json,.json" style="display:none" onchange="uploadData(event)">
 <span id="dataStatus" class="small" style="margin-left:10px;"></span>
 
-<div class="grid" style="margin-top:20px;">
-  <div class="card"><h3><span id="revenueTitle">Monthly Net Sales</span></h3><div class="result" id="monthlyRevenue"></div></div>
-  <div class="card"><h3><span id="grossRevenueTitle">Monthly Gross Revenue</span></h3><div class="result" id="grossRevenue"></div></div>
-  <div class="card truthBox"><h3><span id="profitTitle">Monthly Owner Profit</span></h3><div class="result" id="monthlyProfit"></div><p class="small">This is the true operating profit. Tips are not subtracted because customers pay them to staff.</p></div>
-  <div class="card"><h3><span id="breakevenTitle">Monthly Breakeven Net Sales</span></h3><div class="result" id="breakevenRevenue"></div></div>
-</div>
+<div class="summarySection card">
+  <div class="sectionHeader">
+    <h3>Financial Summary</h3>
+    <button type="button" class="summaryToggleBtn" onclick="toggleSection('financialSummaryBody', 'financialSummaryToggle')" id="financialSummaryToggle">Hide</button>
+  </div>
+  <div id="financialSummaryBody" class="summaryBody">
+    <div class="grid" style="margin-top:14px;">
+      <div class="card"><h3><span id="revenueTitle">Monthly Net Sales</span></h3><div class="result" id="monthlyRevenue"></div></div>
+      <div class="card"><h3><span id="grossRevenueTitle">Monthly Gross Revenue</span></h3><div class="result" id="grossRevenue"></div></div>
+      <div class="card truthBox"><h3><span id="profitTitle">Monthly Owner Profit</span></h3><div class="result" id="monthlyProfit"></div><p class="small">This is the true operating profit. Tips are not subtracted because customers pay them to staff.</p></div>
+      <div class="card"><h3><span id="breakevenTitle">Monthly Breakeven Net Sales</span></h3><div class="result" id="breakevenRevenue"></div></div>
+    </div>
 
-<div class="flowGrid">
-  <div class="card flowCard">
-    <h3><span id="salesTaxFlowTitle">Monthly Sales Tax</span></h3>
-    <div class="flowValue" id="salesTaxFlow"></div>
-    <p class="small">Collected from customers and passed through to the state.</p>
-  </div>
-  <div class="card flowCard">
-    <h3><span id="posFeesFlowTitle">Monthly POS Fees</span></h3>
-    <div class="flowValue" id="posFeesFlow"></div>
-    <p class="small">Real expense charged on gross cash processed.</p>
-  </div>
-  <div class="card flowCard">
-    <h3><span id="tipsFlowTitle">Monthly Tips</span></h3>
-    <div class="flowValue" id="tipsFlow"></div>
-    <p class="small">Collected for staff; optional inclusion in labor display.</p>
-  </div>
-  <div class="card flowCard">
-    <h3><span id="cashLaborTitle">Monthly Cash Labor</span></h3>
-    <div class="flowValue" id="cashLaborFlow"></div>
-    <p class="small">BOH payroll + FOH minimum paid labor.</p>
-  </div>
-  <div class="card flowCard">
-    <h3><span id="staffCompTitle">Monthly Staff Compensation</span></h3>
-    <div class="flowValue" id="staffCompFlow"></div>
-    <p class="small">Cash labor + tips. This is not the same as restaurant-paid labor.</p>
+    <div class="flowGrid">
+      <div class="card flowCard">
+        <h3><span id="salesTaxFlowTitle">Monthly Sales Tax</span></h3>
+        <div class="flowValue" id="salesTaxFlow"></div>
+        <p class="small">Collected from customers and passed through to the state.</p>
+      </div>
+      <div class="card flowCard">
+        <h3><span id="posFeesFlowTitle">Monthly POS Fees</span></h3>
+        <div class="flowValue" id="posFeesFlow"></div>
+        <p class="small">Real expense charged on gross cash processed.</p>
+      </div>
+      <div class="card flowCard">
+        <h3><span id="tipsFlowTitle">Monthly Tips</span></h3>
+        <div class="flowValue" id="tipsFlow"></div>
+        <p class="small">Collected for staff; optional inclusion in labor display.</p>
+      </div>
+      <div class="card flowCard">
+        <h3><span id="cashLaborTitle">Monthly Cash Labor</span></h3>
+        <div class="flowValue" id="cashLaborFlow"></div>
+        <p class="small">BOH payroll + FOH minimum paid labor.</p>
+      </div>
+      <div class="card flowCard">
+        <h3><span id="staffCompTitle">Monthly Staff Compensation</span></h3>
+        <div class="flowValue" id="staffCompFlow"></div>
+        <p class="small">Cash labor + tips. This is not the same as restaurant-paid labor.</p>
+      </div>
+    </div>
   </div>
 </div>
 
