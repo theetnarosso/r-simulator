@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Restaurant Financial Simulator</title>
   <style>
     body { font-family: Arial, sans-serif; margin:25px; background:#f7f3ee; color:#222; }
@@ -22,7 +23,44 @@
     .sectionHeader { display:flex; justify-content:space-between; align-items:center; gap:10px; }
     .toggleBtn { margin-top:0; padding:8px 14px; background:#d8c3ad; color:#222; }
     .dollarHint { display:block; font-size:12px; color:#7a1f16; margin-top:3px; font-weight:bold; }
-  </style>
+    .truthBox { border-left:6px solid #2f855a; background:#ffffff; }
+    .warningBox { border-left:6px solid #d69e2e; background:#fffaf0; }
+    .pill { display:inline-block; padding:3px 8px; border-radius:999px; background:#f0e5d8; font-size:12px; font-weight:bold; color:#7a1f16; }
+    .flowGrid { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:15px; margin-top:20px; }
+    .flowCard { border-left:6px solid #d8c3ad; }
+    .flowValue { font-size:22px; font-weight:bold; color:#7a1f16; margin-top:8px; }
+    .switchRow { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:15px; padding:10px; background:#f7f3ee; border-radius:10px; }
+    .switch { position:relative; display:inline-block; width:58px; height:30px; flex:0 0 auto; }
+    .switch input { opacity:0; width:0; height:0; }
+    .sliderSwitch { position:absolute; cursor:pointer; top:0; left:0; right:0; bottom:0; background:#ccc; transition:.2s; border-radius:30px; }
+    .sliderSwitch:before { position:absolute; content:""; height:22px; width:22px; left:4px; bottom:4px; background:white; transition:.2s; border-radius:50%; }
+    .switch input:checked + .sliderSwitch { background:#7a1f16; }
+    .switch input:checked + .sliderSwitch:before { transform:translateX(28px); }
+
+     (max-width: 900px) {
+      body { margin:14px; }
+      .grid, .flowGrid { grid-template-columns:1fr 1fr; }
+      .monthGrid { grid-template-columns:1fr 1fr; }
+      canvas { width:100%; height:auto; max-width:100%; }
+    }
+
+     (max-width: 600px) {
+      body { margin:10px; font-size:15px; }
+      h1 { font-size:28px; line-height:1.1; }
+      h3 { font-size:18px; line-height:1.2; margin:8px 0; }
+      .grid, .flowGrid, .monthGrid { grid-template-columns:1fr; gap:12px; }
+      .card { padding:14px; border-radius:14px; }
+      .result, .flowValue { font-size:28px; line-height:1.1; word-break:break-word; }
+      .timeframeButtons { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+      button, .timeframeBtn, .toggleBtn { width:100%; min-height:44px; margin-top:8px; font-size:15px; }
+      input[type="range"] { height:34px; }
+      label { font-size:14px; }
+      .sectionHeader { align-items:flex-start; flex-direction:column; }
+      .switchRow { flex-direction:column; align-items:flex-start; }
+      .switch { align-self:flex-end; }
+      canvas { width:100%; height:auto; max-width:100%; }
+    }
+    </style>
 </head>
 
 <body>
@@ -75,8 +113,25 @@
     <label>FOH Minimum Paid Labor: <b id="fohMinLaborVal">$5,000</b><span class="dollarHint" id="fohMinLaborDollarVal"></span></label>
     <input id="fohMinLabor" type="range" min="0" max="50000" step="1" value="5000" oninput="syncMoneySlider('fohMinLabor'); calculate();">
 
-    <label>Tips Collected % of Revenue: <b id="tipsPctVal">18.0%</b><span class="dollarHint" id="tipsPctDollarVal"></span></label>
+    <label>Tips Collected % of Net Sales: <b id="tipsPctVal">18.0%</b><span class="dollarHint" id="tipsPctDollarVal"></span></label>
     <input id="tipsPct" type="range" min="0" max="30" step="1" value="18" oninput="syncPercentSlider('tipsPct'); calculate();">
+
+    <label>Sales Tax %: <b id="salesTaxVal">7.0%</b><span class="dollarHint" id="salesTaxDollarVal"></span></label>
+    <input id="salesTax" type="range" min="0" max="15" step="0.1" value="7" oninput="syncPercentSlider('salesTax'); calculate();">
+
+    <label>POS Fee %: <b id="posFeePctVal">3.0%</b><span class="dollarHint" id="posFeeDollarVal"></span></label>
+    <input id="posFeePct" type="range" min="0" max="8" step="0.1" value="3" oninput="syncPercentSlider('posFeePct'); calculate();">
+
+    <div class="switchRow">
+      <div>
+        <b>Show Tips Inside Labor Bar</b>
+        <div class="small">ON = labor bar shows total staff compensation, including tips. OFF = labor/profit view uses only restaurant-paid labor. Owner Profit never subtracts tips.</div>
+      </div>
+      <label class="switch">
+        <input id="includeTipsInLabor" type="checkbox" onchange="calculate();">
+        <span class="sliderSwitch"></span>
+      </label>
+    </div>
   </div>
 
   <div class="card">
@@ -101,9 +156,38 @@
 <span id="dataStatus" class="small" style="margin-left:10px;"></span>
 
 <div class="grid" style="margin-top:20px;">
-  <div class="card"><h3><span id="revenueTitle">Monthly Revenue</span></h3><div class="result" id="monthlyRevenue"></div></div>
-  <div class="card"><h3><span id="profitTitle">Monthly Profit</span></h3><div class="result" id="monthlyProfit"></div></div>
-  <div class="card"><h3><span id="breakevenTitle">Monthly Breakeven Revenue</span></h3><div class="result" id="breakevenRevenue"></div></div>
+  <div class="card"><h3><span id="revenueTitle">Monthly Net Sales</span></h3><div class="result" id="monthlyRevenue"></div></div>
+  <div class="card"><h3><span id="grossRevenueTitle">Monthly Gross Revenue</span></h3><div class="result" id="grossRevenue"></div></div>
+  <div class="card truthBox"><h3><span id="profitTitle">Monthly Owner Profit</span></h3><div class="result" id="monthlyProfit"></div><p class="small">This is the true operating profit. Tips are not subtracted because customers pay them to staff.</p></div>
+  <div class="card"><h3><span id="breakevenTitle">Monthly Breakeven Net Sales</span></h3><div class="result" id="breakevenRevenue"></div></div>
+</div>
+
+<div class="flowGrid">
+  <div class="card flowCard">
+    <h3><span id="salesTaxFlowTitle">Monthly Sales Tax</span></h3>
+    <div class="flowValue" id="salesTaxFlow"></div>
+    <p class="small">Collected from customers and passed through to the state.</p>
+  </div>
+  <div class="card flowCard">
+    <h3><span id="posFeesFlowTitle">Monthly POS Fees</span></h3>
+    <div class="flowValue" id="posFeesFlow"></div>
+    <p class="small">Real expense charged on gross cash processed.</p>
+  </div>
+  <div class="card flowCard">
+    <h3><span id="tipsFlowTitle">Monthly Tips</span></h3>
+    <div class="flowValue" id="tipsFlow"></div>
+    <p class="small">Collected for staff; optional inclusion in labor display.</p>
+  </div>
+  <div class="card flowCard">
+    <h3><span id="cashLaborTitle">Monthly Cash Labor</span></h3>
+    <div class="flowValue" id="cashLaborFlow"></div>
+    <p class="small">BOH payroll + FOH minimum paid labor.</p>
+  </div>
+  <div class="card flowCard">
+    <h3><span id="staffCompTitle">Monthly Staff Compensation</span></h3>
+    <div class="flowValue" id="staffCompFlow"></div>
+    <p class="small">Cash labor + tips. This is not the same as restaurant-paid labor.</p>
+  </div>
 </div>
 
 <div class="card" style="margin-top:20px;">
@@ -112,21 +196,21 @@
     <button type="button" class="toggleBtn" onclick="toggleSection('whatIfBody', 'whatIfToggle')" id="whatIfToggle">Hide</button>
   </div>
   <div id="whatIfBody">
-  <p class="small">Changing profit calculates the revenue needed. COGS scale automatically. Labor is split between BOH fixed payroll, FOH minimum paid labor, and tips collected as a percentage of revenue.</p>
+  <p class="small">These sliders now follow the selected timeframe. Example: in Weekly view, the targets are weekly amounts; the simulator converts them back to the monthly base internally. Changing profit calculates the net sales needed. COGS scale automatically. Labor can be shown as cash labor only or cash labor plus tips using the Include Tips in Labor switch.</p>
 
-  <label>Revenue Target: <b id="revSliderVal"></b></label>
+  <label><span id="revSliderLabel">Net Sales Target</span>: <b id="revSliderVal"></b></label>
   <input id="revSlider" type="range" min="25000" max="300000" step="1" oninput="setRevenueFromSlider()">
 
-  <label>COGS Target: <b id="cogsSliderVal"></b></label>
+  <label><span id="cogsSliderLabel">COGS Target</span>: <b id="cogsSliderVal"></b></label>
   <input id="cogsSlider" type="range" min="5000" max="120000" step="1" oninput="setCOGSFromSlider()">
 
-  <label>Labor Target: <b id="laborSliderVal"></b></label>
+  <label><span id="laborSliderLabel">Labor Target</span>: <b id="laborSliderVal"></b></label>
   <input id="laborSlider" type="range" min="5000" max="120000" step="1" oninput="setLaborFromSlider()">
 
-  <label>Fixed Cost Target: <b id="fixedSliderVal"></b></label>
+  <label><span id="fixedSliderLabel">Fixed Cost Target</span>: <b id="fixedSliderVal"></b></label>
   <input id="fixedSlider" type="range" min="5000" max="80000" step="1" oninput="setFixedFromSlider()">
 
-  <label>Profit Target: <b id="profitSliderVal"></b></label>
+  <label><span id="profitSliderLabel">Profit Target</span>: <b id="profitSliderVal"></b></label>
   <input id="profitSlider" type="range" min="-25000" max="100000" step="1" oninput="setProfitFromSlider()">
   </div>
 </div>
@@ -169,6 +253,11 @@ function val(id) {
   return Number(document.getElementById(id).value);
 }
 
+function includeTipsInLabor() {
+  const el = document.getElementById("includeTipsInLabor");
+  return el ? el.checked : false;
+}
+
 function getTimeframe() {
   return selectedTimeframe;
 }
@@ -208,6 +297,20 @@ function scaleForTimeframe(n) {
   return n * timeframeMultiplier();
 }
 
+function monthlyFromTimeframe(n) {
+  const multiplier = timeframeMultiplier();
+  return multiplier === 0 ? n : n / multiplier;
+}
+
+function setRangeForTimeframe(id, monthlyMin, monthlyMax) {
+  const slider = document.getElementById(id);
+  const min = scaleForTimeframe(monthlyMin);
+  const max = scaleForTimeframe(monthlyMax);
+  slider.min = Math.round(min);
+  slider.max = Math.round(max);
+  slider.step = 1;
+}
+
 function syncSlider(id) {
   document.getElementById(id + "Val").innerHTML = document.getElementById(id).value;
 }
@@ -223,7 +326,7 @@ function syncPercentSlider(id) {
 function syncAllSliders() {
   ["inside","turns","days"].forEach(syncSlider);
   ["avgCheck","bohPayroll","fohMinLabor","rent","utilities","misc"].forEach(syncMoneySlider);
-  ["foodCost","bevCost","foodMix","tipsPct"].forEach(syncPercentSlider);
+  ["foodCost","bevCost","foodMix","tipsPct","salesTax","posFeePct"].forEach(syncPercentSlider);
 }
 
 function getSeasonMeaning(factor) {
@@ -246,6 +349,7 @@ function buildSeasonControls() {
         <label><b>${m}</b> Factor: <span id="factorVal${i}">${seasonFactors[i].toFixed(2)}</span></label>
         <input id="factor${i}" type="range" min="0.30" max="1.30" step="0.01" value="${seasonFactors[i]}" oninput="updateSeasonFactor(${i})">
         <div id="factorLabel${i}" class="seasonLabel" style="color:${meaning.color};">${meaning.text}</div>
+        <div id="factorRevenue${i}" class="seasonLabel" style="color:#7a1f16; font-weight:bold; margin-top:6px;">Monthly Net Sales: --</div>
       </div>
     `;
   });
@@ -261,6 +365,18 @@ function updateSeasonFactor(index) {
   document.getElementById("factorLabel" + index).style.color = meaning.color;
 
   calculate();
+}
+
+function updateSeasonRevenueDisplays() {
+  if (!current || typeof current.netSales !== "number") return;
+
+  seasonFactors.forEach((factor, i) => {
+    const adjustedNetSales = current.netSales * factor;
+    const el = document.getElementById("factorRevenue" + i);
+    if (el) {
+      el.innerHTML = "Monthly Net Sales: " + money(adjustedNetSales);
+    }
+  });
 }
 
 function toggleSection(bodyId, buttonId) {
@@ -289,6 +405,8 @@ function getInputs() {
   const bohPayroll = val("bohPayroll");
   const fohMinLabor = val("fohMinLabor");
   const tipsPct = val("tipsPct") / 100;
+  const salesTax = val("salesTax") / 100;
+  const posFeePct = val("posFeePct") / 100;
 
   const rent = val("rent");
   const utilities = val("utilities");
@@ -296,30 +414,55 @@ function getInputs() {
 
   const seats = inside;
   const coversPerNight = seats * turns;
-  const revenue = coversPerNight * avgCheck * days;
+
+  // Operating revenue base
+  const netSales = coversPerNight * avgCheck * days;
+
+  // Cash processed through POS
+  const salesTaxAmount = netSales * salesTax;
+  const grossRevenue = netSales + salesTaxAmount;
+
+  // POS fees are charged on gross revenue, including tax collected.
+  const posFees = grossRevenue * posFeePct;
 
   const blendedCOGS = (foodCost * foodMix) + (bevCost * (1 - foodMix));
-  const cogs = revenue * blendedCOGS;
+  const cogs = netSales * blendedCOGS;
 
-  const tipsCollected = revenue * tipsPct;
-  const fohLabor = fohMinLabor + tipsCollected;
-  const labor = bohPayroll + fohLabor;
-  const effectiveLaborPct = labor / revenue;
+  const tipsCollected = netSales * tipsPct;
+  const includeTips = includeTipsInLabor();
+
+  // Cash labor is the restaurant-paid labor. Tips are a customer-to-staff pass-through.
+  const cashLabor = bohPayroll + fohMinLabor;
+  const fohLaborCash = fohMinLabor;
+  const fohLaborWithTips = fohMinLabor + tipsCollected;
+  const totalStaffCompensation = cashLabor + tipsCollected;
+
+  // The toggle changes the LABOR DISPLAY only. It does not change Owner Profit.
+  const displayedLabor = includeTips ? totalStaffCompensation : cashLabor;
+  const labor = displayedLabor;
+  const effectiveLaborPct = displayedLabor / netSales;
 
   const fixed = rent + utilities + misc;
-  const expenses = cogs + labor + fixed;
-  const profit = revenue - expenses;
 
-  const contributionMargin = 1 - blendedCOGS - effectiveLaborPct;
-  const breakeven = fixed / contributionMargin;
+  // Owner Profit: true restaurant economics. Tips are not subtracted.
+  const ownerExpenses = cogs + cashLabor + fixed + posFees;
+  const ownerProfit = netSales - ownerExpenses;
+
+  const profit = ownerProfit;
+
+  // Breakeven is based on true restaurant-paid costs, not tips.
+  const variableRate = blendedCOGS + (posFeePct * (1 + salesTax));
+  const contributionMargin = 1 - variableRate;
+  const fixedLabor = cashLabor;
+  const breakeven = (fixed + fixedLabor) / contributionMargin;
 
   return {
     inside, turns, avgCheck, days,
-    foodCost, bevCost, foodMix, bohPayroll, fohMinLabor, tipsPct,
+    foodCost, bevCost, foodMix, bohPayroll, fohMinLabor, tipsPct, salesTax, posFeePct,
     rent, utilities, misc,
-    seats, coversPerNight, revenue, blendedCOGS,
-    cogs, tipsCollected, fohLabor, labor, effectiveLaborPct,
-    fixed, expenses, profit, contributionMargin, breakeven
+    seats, coversPerNight, revenue: netSales, netSales, salesTaxAmount, grossRevenue, posFees, blendedCOGS,
+    cogs, tipsCollected, includeTips, cashLabor, fohLaborCash, fohLaborWithTips, displayedLabor, labor, totalStaffCompensation, effectiveLaborPct,
+    fixed, ownerExpenses, ownerProfit, profit, contributionMargin, breakeven
   };
 }
 
@@ -327,42 +470,76 @@ function calculate() {
   current = getInputs();
 
   const label = timeframeLabel();
-  const displayRevenue = scaleForTimeframe(current.revenue);
+  const displayRevenue = scaleForTimeframe(current.netSales);
+  const displayGrossRevenue = scaleForTimeframe(current.grossRevenue);
   const displayCOGS = scaleForTimeframe(current.cogs);
   const displayLabor = scaleForTimeframe(current.labor);
   const displayFixed = scaleForTimeframe(current.fixed);
-  const displayProfit = scaleForTimeframe(current.profit);
+  const displaySalesTax = scaleForTimeframe(current.salesTaxAmount);
+  const displayPOSFees = scaleForTimeframe(current.posFees);
+  const displayTips = scaleForTimeframe(current.tipsCollected);
+  const displayCashLabor = scaleForTimeframe(current.cashLabor);
+  const displayStaffComp = scaleForTimeframe(current.totalStaffCompensation);
+  const displayProfit = scaleForTimeframe(current.ownerProfit);
   const displayBreakeven = scaleForTimeframe(current.breakeven);
 
-  document.getElementById("revenueTitle").innerHTML = label + " Revenue";
-  document.getElementById("profitTitle").innerHTML = label + " Profit";
-  document.getElementById("breakevenTitle").innerHTML = label + " Breakeven Revenue";
+  document.getElementById("revenueTitle").innerHTML = label + " Net Sales";
+  document.getElementById("grossRevenueTitle").innerHTML = label + " Gross Revenue";
+  document.getElementById("profitTitle").innerHTML = label + " Owner Profit";
+  document.getElementById("breakevenTitle").innerHTML = label + " Breakeven Net Sales";
+  document.getElementById("salesTaxFlowTitle").innerHTML = label + " Sales Tax";
+  document.getElementById("posFeesFlowTitle").innerHTML = label + " POS Fees";
+  document.getElementById("tipsFlowTitle").innerHTML = label + " Tips";
+  document.getElementById("cashLaborTitle").innerHTML = label + " Cash Labor";
+  document.getElementById("staffCompTitle").innerHTML = label + " Staff Compensation";
 
   document.getElementById("monthlyRevenue").innerHTML = money(displayRevenue);
+  document.getElementById("grossRevenue").innerHTML = money(displayGrossRevenue);
   document.getElementById("monthlyProfit").innerHTML = money(displayProfit);
   document.getElementById("breakevenRevenue").innerHTML = money(displayBreakeven);
+  document.getElementById("salesTaxFlow").innerHTML = money(displaySalesTax);
+  document.getElementById("posFeesFlow").innerHTML = money(displayPOSFees);
+  document.getElementById("tipsFlow").innerHTML = money(displayTips);
+  document.getElementById("cashLaborFlow").innerHTML = money(displayCashLabor);
+  document.getElementById("staffCompFlow").innerHTML = money(displayStaffComp);
 
   updateSliders();
   updateVariableCostDollarDisplays();
   updateExplanations();
-  drawCostChart(displayRevenue, displayCOGS, displayLabor, displayFixed, displayProfit, label);
-  drawSeasonChart(current.revenue, current.blendedCOGS, current.bohPayroll, current.fohMinLabor, current.tipsPct, current.fixed);
+  drawCostChart(displayRevenue, displayCOGS, displayLabor, displayFixed, displayPOSFees, displaySalesTax, displayTips, displayProfit, label);
+  drawSeasonChart(current.netSales, current.blendedCOGS, current.bohPayroll, current.fohMinLabor, current.tipsPct, current.fixed, current.salesTax, current.posFeePct, current.includeTips);
+  updateSeasonRevenueDisplays();
 }
 
 function updateSliders() {
-  document.getElementById("revSlider").value = current.revenue;
-  document.getElementById("cogsSlider").value = current.cogs;
-  document.getElementById("laborSlider").value = current.labor;
-  document.getElementById("fixedSlider").value = current.fixed;
-  document.getElementById("profitSlider").value = current.profit;
+  const label = timeframeLabel();
 
-  document.getElementById("revSliderVal").innerHTML = money(current.revenue);
-  document.getElementById("cogsSliderVal").innerHTML = money(current.cogs);
-  document.getElementById("laborSliderVal").innerHTML = money(current.labor);
-  document.getElementById("fixedSliderVal").innerHTML = money(current.fixed);
-  document.getElementById("profitSliderVal").innerHTML = money(current.profit);
+  // The What-If sliders operate in the selected display timeframe.
+  // Internally, the app still stores and calculates from a monthly base.
+  setRangeForTimeframe("revSlider", 25000, 300000);
+  setRangeForTimeframe("cogsSlider", 5000, 120000);
+  setRangeForTimeframe("laborSlider", 5000, 120000);
+  setRangeForTimeframe("fixedSlider", 5000, 80000);
+  setRangeForTimeframe("profitSlider", -25000, 100000);
+
+  document.getElementById("revSlider").value = Math.round(scaleForTimeframe(current.revenue));
+  document.getElementById("cogsSlider").value = Math.round(scaleForTimeframe(current.cogs));
+  document.getElementById("laborSlider").value = Math.round(scaleForTimeframe(current.labor));
+  document.getElementById("fixedSlider").value = Math.round(scaleForTimeframe(current.fixed));
+  document.getElementById("profitSlider").value = Math.round(scaleForTimeframe(current.ownerProfit));
+
+  document.getElementById("revSliderLabel").innerHTML = label + " Net Sales Target";
+  document.getElementById("cogsSliderLabel").innerHTML = label + " COGS Target";
+  document.getElementById("laborSliderLabel").innerHTML = label + " Labor Target";
+  document.getElementById("fixedSliderLabel").innerHTML = label + " Fixed Cost Target";
+  document.getElementById("profitSliderLabel").innerHTML = label + " Profit Target";
+
+  document.getElementById("revSliderVal").innerHTML = money(scaleForTimeframe(current.revenue));
+  document.getElementById("cogsSliderVal").innerHTML = money(scaleForTimeframe(current.cogs));
+  document.getElementById("laborSliderVal").innerHTML = money(scaleForTimeframe(current.labor));
+  document.getElementById("fixedSliderVal").innerHTML = money(scaleForTimeframe(current.fixed));
+  document.getElementById("profitSliderVal").innerHTML = money(scaleForTimeframe(current.ownerProfit));
 }
-
 
 function updateVariableCostDollarDisplays() {
   const label = timeframeLabel();
@@ -378,13 +555,17 @@ function updateVariableCostDollarDisplays() {
   const displayedBOH = scaleForTimeframe(current.bohPayroll);
   const displayedFOHMin = scaleForTimeframe(current.fohMinLabor);
   const displayedTips = scaleForTimeframe(current.tipsCollected);
+  const displayedSalesTax = scaleForTimeframe(current.salesTaxAmount);
+  const displayedPOSFees = scaleForTimeframe(current.posFees);
 
   document.getElementById("foodCostDollarVal").innerHTML = label + " COGS dollars: " + money(displayedBlendedCOGS) + " total | Food portion: " + money(displayedFoodCOGS);
   document.getElementById("bevCostDollarVal").innerHTML = label + " beverage COGS dollars: " + money(displayedBeverageCOGS);
   document.getElementById("foodMixDollarVal").innerHTML = label + " food sales base: " + money(displayedFoodRevenue) + " | Beverage sales base: " + money(displayedBeverageRevenue);
   document.getElementById("bohPayrollDollarVal").innerHTML = label + " BOH payroll: " + money(displayedBOH);
   document.getElementById("fohMinLaborDollarVal").innerHTML = label + " FOH minimum paid labor: " + money(displayedFOHMin);
-  document.getElementById("tipsPctDollarVal").innerHTML = label + " tips collected: " + money(displayedTips);
+  document.getElementById("tipsPctDollarVal").innerHTML = label + " tips collected: " + money(displayedTips) + (current.includeTips ? " | included in labor" : " | excluded from labor/profit");
+  document.getElementById("salesTaxDollarVal").innerHTML = label + " sales tax collected: " + money(displayedSalesTax);
+  document.getElementById("posFeeDollarVal").innerHTML = label + " POS fees: " + money(displayedPOSFees);
 }
 
 function updateExplanations() {
@@ -401,33 +582,39 @@ function updateExplanations() {
     <h4>Covers Per Night</h4>
     <p>${current.seats} seats × ${current.turns} turns = <b>${current.coversPerNight.toFixed(1)}</b></p>
 
-    <h4>Monthly Base Revenue</h4>
-    <p>${current.coversPerNight.toFixed(1)} covers × ${money(current.avgCheck)} average check × ${current.days} days = <b>${money(current.revenue)}</b></p>
+    <h4>Monthly Base Net Sales</h4>
+    <p>${current.coversPerNight.toFixed(1)} covers × ${money(current.avgCheck)} average check × ${current.days} days = <b>${money(current.netSales)}</b></p>
 
-    <h4>${label} Displayed Revenue</h4>
-    <p>${money(current.revenue)} monthly base × ${multiplier.toFixed(4)} = <b>${money(scaleForTimeframe(current.revenue))}</b></p>
+    <h4>Sales Tax and Gross Revenue</h4>
+    <p>Sales tax = ${money(current.netSales)} × ${pct(current.salesTax)} = <b>${money(current.salesTaxAmount)}</b></p>
+    <p>Gross revenue cash processed = ${money(current.netSales)} net sales + ${money(current.salesTaxAmount)} sales tax = <b>${money(current.grossRevenue)}</b></p>
+    <p>POS fees = ${money(current.grossRevenue)} × ${pct(current.posFeePct)} = <b>${money(current.posFees)}</b></p>
+
+    <h4>${label} Displayed Net Sales</h4>
+    <p>${money(current.netSales)} monthly base × ${multiplier.toFixed(4)} = <b>${money(scaleForTimeframe(current.netSales))}</b></p>
 
     <h4>COGS</h4>
     <p>Blended COGS = (${pct(current.foodCost)} × ${pct(current.foodMix)}) + (${pct(current.bevCost)} × ${pct(1-current.foodMix)}) = <b>${pct(current.blendedCOGS)}</b></p>
 
     <h4>Labor Split</h4>
     <p>BOH fixed payroll = <b>${money(current.bohPayroll)}</b> monthly base</p>
-    <p>FOH tips collected = ${money(current.revenue)} × ${pct(current.tipsPct)} = <b>${money(current.tipsCollected)}</b> monthly base</p>
-    <p>FOH labor = ${money(current.fohMinLabor)} minimum paid labor + ${money(current.tipsCollected)} tips collected = <b>${money(current.fohLabor)}</b> monthly base</p>
-    <p>Total labor = ${money(current.bohPayroll)} BOH + ${money(current.fohLabor)} FOH = <b>${money(current.labor)}</b> monthly base</p>
-    <p>${label} displayed labor = <b>${money(scaleForTimeframe(current.labor))}</b></p>
+    <p>FOH tips collected = ${money(current.netSales)} × ${pct(current.tipsPct)} = <b>${money(current.tipsCollected)}</b> monthly base</p>
+    <p>Show Tips Inside Labor Bar switch = <b>${current.includeTips ? "ON" : "OFF"}</b></p>
+    <p>Cash labor = ${money(current.bohPayroll)} BOH + ${money(current.fohMinLabor)} FOH minimum paid labor = <b>${money(current.cashLabor)}</b> monthly base</p>
+    <p>Total staff compensation = ${money(current.cashLabor)} cash labor + ${money(current.tipsCollected)} tips = <b>${money(current.totalStaffCompensation)}</b> monthly base</p>
+    <p>Labor displayed on chart = <b>${money(current.displayedLabor)}</b> monthly base. This display choice does not change Owner Profit.</p>
+    <p>${label} displayed labor = <b>${money(scaleForTimeframe(current.displayedLabor))}</b></p>
 
-    <h4>Profit</h4>
-    <p>Monthly base: ${money(current.revenue)} - ${money(current.cogs)} - ${money(current.labor)} - ${money(current.fixed)} = <b>${money(current.profit)}</b></p>
-    <p>${label} displayed profit = <b>${money(scaleForTimeframe(current.profit))}</b></p>
-
+    <h4>Owner Profit</h4>
+    <p>Monthly base: ${money(current.netSales)} net sales - ${money(current.cogs)} COGS - ${money(current.cashLabor)} cash labor - ${money(current.fixed)} fixed costs - ${money(current.posFees)} POS fees = <b>${money(current.ownerProfit)}</b></p>
+    <p>${label} Owner Profit = <b>${money(scaleForTimeframe(current.ownerProfit))}</b></p>
     <h4>Seasonality</h4>
-    <p>Monthly seasonal revenue = Base Revenue × Month Factor.</p>
+    <p>Monthly seasonal net sales = Base Net Sales × Month Factor. Sales tax, gross revenue, POS fees, COGS, tips, labor, and profit then recalculate from seasonal net sales.</p>
   `;
 }
 
 function setRevenueFromSlider() {
-  const targetRevenue = val("revSlider");
+  const targetRevenue = monthlyFromTimeframe(val("revSlider"));
   current = getInputs();
 
   const newAvgCheck = targetRevenue / (current.coversPerNight * current.days);
@@ -438,11 +625,12 @@ function setRevenueFromSlider() {
 }
 
 function setProfitFromSlider() {
-  const targetProfit = val("profitSlider");
+  const targetProfit = monthlyFromTimeframe(val("profitSlider"));
   current = getInputs();
 
-  const fixedLabor = current.bohPayroll + current.fohMinLabor;
-  let requiredRevenue = (targetProfit + current.fixed + fixedLabor) / (1 - current.blendedCOGS - current.tipsPct);
+  const fixedLabor = current.cashLabor;
+  const variableRate = current.blendedCOGS + (current.posFeePct * (1 + current.salesTax));
+  let requiredRevenue = (targetProfit + current.fixed + fixedLabor) / (1 - variableRate);
 
   const newAvgCheck = requiredRevenue / (current.coversPerNight * current.days);
   document.getElementById("avgCheck").value = newAvgCheck.toFixed(0);
@@ -452,7 +640,7 @@ function setProfitFromSlider() {
 }
 
 function setCOGSFromSlider() {
-  const targetCOGS = val("cogsSlider");
+  const targetCOGS = monthlyFromTimeframe(val("cogsSlider"));
   current = getInputs();
 
   const newBlendedCOGS = targetCOGS / current.revenue;
@@ -465,12 +653,13 @@ function setCOGSFromSlider() {
 }
 
 function setLaborFromSlider() {
-  const targetLabor = val("laborSlider");
+  const targetLabor = monthlyFromTimeframe(val("laborSlider"));
   current = getInputs();
 
   // Keep FOH minimum labor and tips percentage unchanged.
-  // Adjust BOH fixed payroll to reach the selected total labor target when possible.
-  const requiredBOH = targetLabor - current.fohLabor;
+  // Adjust BOH fixed payroll to reach the selected displayed labor target based on the current tip-display switch.
+  const nonBOHDisplayedLabor = current.includeTips ? (current.fohMinLabor + current.tipsCollected) : current.fohMinLabor;
+  const requiredBOH = targetLabor - nonBOHDisplayedLabor;
   document.getElementById("bohPayroll").value = Math.max(0, requiredBOH).toFixed(0);
   syncMoneySlider("bohPayroll");
 
@@ -478,7 +667,7 @@ function setLaborFromSlider() {
 }
 
 function setFixedFromSlider() {
-  const targetFixed = val("fixedSlider");
+  const targetFixed = monthlyFromTimeframe(val("fixedSlider"));
   current = getInputs();
 
   const baseFixed = current.rent + current.utilities;
@@ -490,16 +679,19 @@ function setFixedFromSlider() {
   calculate();
 }
 
-function drawCostChart(revenue, cogs, labor, fixed, profit, label) {
+function drawCostChart(revenue, cogs, labor, fixed, posFees, salesTax, tips, profit, label) {
   const canvas = document.getElementById("costChart");
   const ctx = canvas.getContext("2d");
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
   const data = [
-    ["Revenue", revenue, "#2f855a"],
+    ["Net Sales", revenue, "#2f855a"],
+    ["Sales Tax", salesTax, "#718096"],
+    ["Tips", tips, "#38a169"],
     ["COGS", cogs, "#d69e2e"],
     ["Labor", labor, "#3182ce"],
     ["Fixed", fixed, "#805ad5"],
+    ["POS Fees", posFees, "#dd6b20"],
     ["Profit", profit, profit >= 0 ? "#2f855a" : "#c53030"]
   ];
 
@@ -508,15 +700,15 @@ function drawCostChart(revenue, cogs, labor, fixed, profit, label) {
 
   ctx.font = "14px Arial";
   ctx.fillStyle = "#222";
-  ctx.fillText(label + " Financial Breakdown", 30, 25);
+  ctx.fillText(label + " Financial Breakdown Based on Net Sales", 30, 25);
 
   data.forEach((d, i) => {
-    const x = 70 + i * 170;
+    const x = 35 + i * 110;
     const h = Math.abs(d[1]) / max * 200;
     const y = d[1] >= 0 ? baseY - h : baseY;
 
     ctx.fillStyle = d[2];
-    ctx.fillRect(x, y, 90, h);
+    ctx.fillRect(x, y, 70, h);
 
     ctx.fillStyle = "#222";
     ctx.fillText(d[0], x, 295);
@@ -524,16 +716,21 @@ function drawCostChart(revenue, cogs, labor, fixed, profit, label) {
   });
 }
 
-function drawSeasonChart(baseRevenue, cogsPct, bohPayroll, fohMinLabor, tipsPct, fixedCosts) {
+function drawSeasonChart(baseRevenue, cogsPct, bohPayroll, fohMinLabor, tipsPct, fixedCosts, salesTax, posFeePct, includeTips) {
   const canvas = document.getElementById("seasonChart");
   const ctx = canvas.getContext("2d");
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
   const profits = seasonFactors.map(f => {
     const rev = baseRevenue * f;
+    const salesTaxAmount = rev * salesTax;
+    const grossRevenue = rev + salesTaxAmount;
+    const posFees = grossRevenue * posFeePct;
     const cogs = rev * cogsPct;
-    const labor = bohPayroll + fohMinLabor + (rev * tipsPct);
-    return rev - cogs - labor - fixedCosts;
+    const tips = rev * tipsPct;
+    const cashLabor = bohPayroll + fohMinLabor;
+    // Seasonality chart shows true Owner Profit; tips are pass-through.
+    return rev - cogs - cashLabor - fixedCosts - posFees;
   });
 
   const max = Math.max(...profits.map(p => Math.abs(p)));
@@ -541,7 +738,7 @@ function drawSeasonChart(baseRevenue, cogsPct, bohPayroll, fohMinLabor, tipsPct,
 
   ctx.font = "14px Arial";
   ctx.fillStyle = "#222";
-  ctx.fillText("Seasonality Profit / Loss Projection", 30, 25);
+  ctx.fillText("Seasonality Owner Profit / Loss Projection", 30, 25);
 
   ctx.strokeStyle = "#999";
   ctx.beginPath();
@@ -571,7 +768,7 @@ function drawSeasonChart(baseRevenue, cogsPct, bohPayroll, fohMinLabor, tipsPct,
 function collectAppData() {
   const inputIds = [
     "inside", "turns", "avgCheck", "days",
-    "foodCost", "bevCost", "foodMix", "bohPayroll", "fohMinLabor", "tipsPct",
+    "foodCost", "bevCost", "foodMix", "bohPayroll", "fohMinLabor", "tipsPct", "salesTax", "posFeePct",
     "rent", "utilities", "misc"
   ];
 
@@ -582,9 +779,10 @@ function collectAppData() {
 
   return {
     appName: "Restaurant Financial Simulator",
-    version: "1.7",
+    version: "1.9",
     savedAt: new Date().toISOString(),
     timeframe: selectedTimeframe,
+    includeTipsInLabor: includeTipsInLabor(),
     inputs: inputs,
     seasonFactors: seasonFactors
   };
@@ -623,6 +821,11 @@ function uploadData(event) {
 
       if (data.timeframe && ["day", "week", "month", "year"].includes(data.timeframe)) {
         selectedTimeframe = data.timeframe;
+      }
+
+      if (typeof data.includeTipsInLabor === "boolean") {
+        const tipSwitch = document.getElementById("includeTipsInLabor");
+        if (tipSwitch) tipSwitch.checked = data.includeTipsInLabor;
       }
 
       Object.keys(data.inputs).forEach(id => {
