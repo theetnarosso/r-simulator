@@ -420,6 +420,10 @@ function buildSeasonControls() {
         <input id="factor${i}" type="range" min="0.00" max="2.00" step="0.01" value="${seasonFactors[i]}" oninput="updateSeasonFactor(${i})">
         <div id="factorLabel${i}" class="seasonLabel" style="color:${meaning.color};">${meaning.text}</div>
         <div id="factorRevenue${i}" class="seasonLabel" style="color:#7a1f16; font-weight:bold; margin-top:6px;">Monthly Net Sales: --</div>
+        <div id="factorCOGS${i}" class="seasonLabel" style="color:#d69e2e; font-weight:bold;">Monthly COGS: --</div>
+        <div id="factorLabor${i}" class="seasonLabel" style="color:#3182ce; font-weight:bold;">Monthly Labor: --</div>
+        <div id="factorFixed${i}" class="seasonLabel" style="color:#805ad5; font-weight:bold;">Monthly Fixed Cost: --</div>
+        <div id="factorProfit${i}" class="seasonLabel" style="color:#2f855a; font-weight:bold;">Monthly Profit Target: --</div>
       </div>
     `;
   });
@@ -442,9 +446,29 @@ function updateSeasonRevenueDisplays() {
 
   seasonFactors.forEach((factor, i) => {
     const adjustedNetSales = current.netSales * factor;
-    const el = document.getElementById("factorRevenue" + i);
-    if (el) {
-      el.innerHTML = "Monthly Net Sales: " + money(adjustedNetSales);
+    const adjustedCOGS = adjustedNetSales * current.blendedCOGS;
+    const adjustedSalesTax = adjustedNetSales * current.salesTax;
+    const adjustedGrossRevenue = adjustedNetSales + adjustedSalesTax;
+    const adjustedPOSFees = adjustedGrossRevenue * current.posFeePct;
+    const adjustedTips = adjustedNetSales * current.tipsPct;
+    const monthlyCashLabor = current.cashLabor;
+    const displayedMonthlyLabor = current.includeTips ? monthlyCashLabor + adjustedTips : monthlyCashLabor;
+    const monthlyFixedCost = current.fixed;
+    const monthlyProfitTarget = adjustedNetSales - adjustedCOGS - monthlyCashLabor - monthlyFixedCost - adjustedPOSFees;
+
+    const revenueEl = document.getElementById("factorRevenue" + i);
+    const cogsEl = document.getElementById("factorCOGS" + i);
+    const laborEl = document.getElementById("factorLabor" + i);
+    const fixedEl = document.getElementById("factorFixed" + i);
+    const profitEl = document.getElementById("factorProfit" + i);
+
+    if (revenueEl) revenueEl.innerHTML = "Monthly Net Sales: " + money(adjustedNetSales);
+    if (cogsEl) cogsEl.innerHTML = "Monthly COGS: " + money(adjustedCOGS);
+    if (laborEl) laborEl.innerHTML = "Monthly Labor: " + money(displayedMonthlyLabor);
+    if (fixedEl) fixedEl.innerHTML = "Monthly Fixed Cost: " + money(monthlyFixedCost);
+    if (profitEl) {
+      profitEl.innerHTML = "Monthly Profit Target: " + money(monthlyProfitTarget);
+      profitEl.style.color = monthlyProfitTarget >= 0 ? "#2f855a" : "#c53030";
     }
   });
 }
@@ -902,7 +926,7 @@ function collectAppData() {
 
   return {
     appName: "Restaurant Financial Simulator",
-    version: "1.9",
+    version: "2.0",
     savedAt: new Date().toISOString(),
     timeframe: selectedTimeframe,
     includeTipsInLabor: includeTipsInLabor(),
