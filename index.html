@@ -75,7 +75,7 @@
     <button type="button" id="tf_month" class="timeframeBtn active" onclick="setTimeframe('month')">Month</button>
     <button type="button" id="tf_year" class="timeframeBtn" onclick="setTimeframe('year')">Year</button>
   </div>
-  <p class="small">The simulator calculates a monthly base first, then adjusts all displayed values to the selected timeframe.</p>
+  <p class="small">Day, Week, and Month show a clean period view. Year uses the Seasonality Factor Sliders to calculate annual totals.</p>
 </div>
 
 <div class="grid">
@@ -89,7 +89,7 @@
     <input id="turns" type="range" min="0.5" max="4" step="0.05" value="1.5" oninput="syncSlider('turns'); calculate();">
 
     <label>Average Check: <b id="avgCheckVal">$90</b></label>
-    <input id="avgCheck" type="range" min="25" max="250" step="1" value="90" oninput="syncMoneySlider('avgCheck'); calculate();">
+    <input id="avgCheck" type="range" min="0" max="250" step="1" value="90" oninput="syncMoneySlider('avgCheck'); calculate();">
 
     <label>Days Open Per Month: <b id="daysVal">26</b></label>
     <input id="days" type="range" min="1" max="31" step="1" value="26" oninput="syncSlider('days'); calculate();">
@@ -199,7 +199,7 @@
   <p class="small">These sliders now follow the selected timeframe. Example: in Weekly view, the targets are weekly amounts; the simulator converts them back to the monthly base internally. Changing profit calculates the net sales needed. COGS scale automatically. Labor can be shown as cash labor only or cash labor plus tips using the Include Tips in Labor switch.</p>
 
   <label><span id="revSliderLabel">Net Sales Target</span>: <b id="revSliderVal"></b></label>
-  <input id="revSlider" type="range" min="25000" max="300000" step="1" oninput="setRevenueFromSlider()">
+  <input id="revSlider" type="range" min="0" max="300000" step="1" oninput="setRevenueFromSlider()">
 
   <label><span id="cogsSliderLabel">COGS Target</span>: <b id="cogsSliderVal"></b></label>
   <input id="cogsSlider" type="range" min="5000" max="120000" step="1" oninput="setCOGSFromSlider()">
@@ -221,7 +221,7 @@
     <button type="button" class="toggleBtn" onclick="toggleSection('seasonBody', 'seasonToggle')" id="seasonToggle">Hide</button>
   </div>
   <div id="seasonBody">
-    <p class="small">1.00 means 100% of your base month. 0.60 means 60%. 1.20 means 120%. Sliders move in 0.01 increments for precise seasonality control.</p>
+    <p class="small">1.00 means 100% of your base month. 0.00 means 0%. 2.00 means 200%. Sliders move in 0.01 increments for precise seasonality control.</p>
     <div class="monthGrid" id="seasonControls"></div>
   </div>
 </div>
@@ -297,6 +297,76 @@ function scaleForTimeframe(n) {
   return n * timeframeMultiplier();
 }
 
+function seasonFactorTotal() {
+  return seasonFactors.reduce((sum, factor) => sum + Number(factor || 0), 0);
+}
+
+function isYearlyView() {
+  return getTimeframe() === "year";
+}
+
+function getDisplayFinancials() {
+  if (!current || typeof current.netSales !== "number") return null;
+
+  // Day, week, and month remain clean straight-period views.
+  if (!isYearlyView()) {
+    return {
+      netSales: scaleForTimeframe(current.netSales),
+      grossRevenue: scaleForTimeframe(current.grossRevenue),
+      cogs: scaleForTimeframe(current.cogs),
+      labor: scaleForTimeframe(current.labor),
+      fixed: scaleForTimeframe(current.fixed),
+      salesTax: scaleForTimeframe(current.salesTaxAmount),
+      posFees: scaleForTimeframe(current.posFees),
+      tips: scaleForTimeframe(current.tipsCollected),
+      cashLabor: scaleForTimeframe(current.cashLabor),
+      staffComp: scaleForTimeframe(current.totalStaffCompensation),
+      ownerProfit: scaleForTimeframe(current.ownerProfit),
+      breakeven: scaleForTimeframe(current.breakeven)
+    };
+  }
+
+  // Yearly view uses the 12 seasonality factor sliders.
+  // Variable items follow seasonal net sales. Fixed monthly items repeat 12 times.
+  const sf = seasonFactorTotal();
+  const seasonalNetSales = current.netSales * sf;
+  const seasonalSalesTax = current.salesTaxAmount * sf;
+  const seasonalGrossRevenue = seasonalNetSales + seasonalSalesTax;
+  const seasonalPOSFees = seasonalGrossRevenue * current.posFeePct;
+  const seasonalCOGS = current.cogs * sf;
+  const seasonalTips = current.tipsCollected * sf;
+  const yearlyCashLabor = current.cashLabor * 12;
+  const yearlyFixed = current.fixed * 12;
+  const yearlyLaborDisplay = current.includeTips ? yearlyCashLabor + seasonalTips : yearlyCashLabor;
+  const yearlyStaffComp = yearlyCashLabor + seasonalTips;
+  const yearlyOwnerProfit = seasonalNetSales - seasonalCOGS - yearlyCashLabor - yearlyFixed - seasonalPOSFees;
+
+  return {
+    netSales: seasonalNetSales,
+    grossRevenue: seasonalGrossRevenue,
+    cogs: seasonalCOGS,
+    labor: yearlyLaborDisplay,
+    fixed: yearlyFixed,
+    salesTax: seasonalSalesTax,
+    posFees: seasonalPOSFees,
+    tips: seasonalTips,
+    cashLabor: yearlyCashLabor,
+    staffComp: yearlyStaffComp,
+    ownerProfit: yearlyOwnerProfit,
+    breakeven: current.breakeven * 12
+  };
+}
+
+function displayToMonthlyBaseAmount(n, type) {
+  // Converts a selected display-period slider value back into the internal monthly base.
+  if (!isYearlyView()) return monthlyFromTimeframe(n);
+
+  const sf = seasonFactorTotal() || 12;
+  if (type === "variable") return n / sf;
+  if (type === "fixed") return n / 12;
+  return n / 12;
+}
+
 function monthlyFromTimeframe(n) {
   const multiplier = timeframeMultiplier();
   return multiplier === 0 ? n : n / multiplier;
@@ -347,7 +417,7 @@ function buildSeasonControls() {
     box.innerHTML += `
       <div class="card">
         <label><b>${m}</b> Factor: <span id="factorVal${i}">${seasonFactors[i].toFixed(2)}</span></label>
-        <input id="factor${i}" type="range" min="0.30" max="1.30" step="0.01" value="${seasonFactors[i]}" oninput="updateSeasonFactor(${i})">
+        <input id="factor${i}" type="range" min="0.00" max="2.00" step="0.01" value="${seasonFactors[i]}" oninput="updateSeasonFactor(${i})">
         <div id="factorLabel${i}" class="seasonLabel" style="color:${meaning.color};">${meaning.text}</div>
         <div id="factorRevenue${i}" class="seasonLabel" style="color:#7a1f16; font-weight:bold; margin-top:6px;">Monthly Net Sales: --</div>
       </div>
@@ -440,7 +510,7 @@ function getInputs() {
   // The toggle changes the LABOR DISPLAY only. It does not change Owner Profit.
   const displayedLabor = includeTips ? totalStaffCompensation : cashLabor;
   const labor = displayedLabor;
-  const effectiveLaborPct = displayedLabor / netSales;
+  const effectiveLaborPct = netSales > 0 ? displayedLabor / netSales : 0;
 
   const fixed = rent + utilities + misc;
 
@@ -470,18 +540,19 @@ function calculate() {
   current = getInputs();
 
   const label = timeframeLabel();
-  const displayRevenue = scaleForTimeframe(current.netSales);
-  const displayGrossRevenue = scaleForTimeframe(current.grossRevenue);
-  const displayCOGS = scaleForTimeframe(current.cogs);
-  const displayLabor = scaleForTimeframe(current.labor);
-  const displayFixed = scaleForTimeframe(current.fixed);
-  const displaySalesTax = scaleForTimeframe(current.salesTaxAmount);
-  const displayPOSFees = scaleForTimeframe(current.posFees);
-  const displayTips = scaleForTimeframe(current.tipsCollected);
-  const displayCashLabor = scaleForTimeframe(current.cashLabor);
-  const displayStaffComp = scaleForTimeframe(current.totalStaffCompensation);
-  const displayProfit = scaleForTimeframe(current.ownerProfit);
-  const displayBreakeven = scaleForTimeframe(current.breakeven);
+  const display = getDisplayFinancials();
+  const displayRevenue = display.netSales;
+  const displayGrossRevenue = display.grossRevenue;
+  const displayCOGS = display.cogs;
+  const displayLabor = display.labor;
+  const displayFixed = display.fixed;
+  const displaySalesTax = display.salesTax;
+  const displayPOSFees = display.posFees;
+  const displayTips = display.tips;
+  const displayCashLabor = display.cashLabor;
+  const displayStaffComp = display.staffComp;
+  const displayProfit = display.ownerProfit;
+  const displayBreakeven = display.breakeven;
 
   document.getElementById("revenueTitle").innerHTML = label + " Net Sales";
   document.getElementById("grossRevenueTitle").innerHTML = label + " Gross Revenue";
@@ -516,17 +587,18 @@ function updateSliders() {
 
   // The What-If sliders operate in the selected display timeframe.
   // Internally, the app still stores and calculates from a monthly base.
-  setRangeForTimeframe("revSlider", 25000, 300000);
+  setRangeForTimeframe("revSlider", 0, 300000);
   setRangeForTimeframe("cogsSlider", 5000, 120000);
   setRangeForTimeframe("laborSlider", 5000, 120000);
   setRangeForTimeframe("fixedSlider", 5000, 80000);
   setRangeForTimeframe("profitSlider", -25000, 100000);
 
-  document.getElementById("revSlider").value = Math.round(scaleForTimeframe(current.revenue));
-  document.getElementById("cogsSlider").value = Math.round(scaleForTimeframe(current.cogs));
-  document.getElementById("laborSlider").value = Math.round(scaleForTimeframe(current.labor));
-  document.getElementById("fixedSlider").value = Math.round(scaleForTimeframe(current.fixed));
-  document.getElementById("profitSlider").value = Math.round(scaleForTimeframe(current.ownerProfit));
+  const display = getDisplayFinancials();
+  document.getElementById("revSlider").value = Math.round(display.netSales);
+  document.getElementById("cogsSlider").value = Math.round(display.cogs);
+  document.getElementById("laborSlider").value = Math.round(display.labor);
+  document.getElementById("fixedSlider").value = Math.round(display.fixed);
+  document.getElementById("profitSlider").value = Math.round(display.ownerProfit);
 
   document.getElementById("revSliderLabel").innerHTML = label + " Net Sales Target";
   document.getElementById("cogsSliderLabel").innerHTML = label + " COGS Target";
@@ -534,29 +606,30 @@ function updateSliders() {
   document.getElementById("fixedSliderLabel").innerHTML = label + " Fixed Cost Target";
   document.getElementById("profitSliderLabel").innerHTML = label + " Profit Target";
 
-  document.getElementById("revSliderVal").innerHTML = money(scaleForTimeframe(current.revenue));
-  document.getElementById("cogsSliderVal").innerHTML = money(scaleForTimeframe(current.cogs));
-  document.getElementById("laborSliderVal").innerHTML = money(scaleForTimeframe(current.labor));
-  document.getElementById("fixedSliderVal").innerHTML = money(scaleForTimeframe(current.fixed));
-  document.getElementById("profitSliderVal").innerHTML = money(scaleForTimeframe(current.ownerProfit));
+  document.getElementById("revSliderVal").innerHTML = money(display.netSales);
+  document.getElementById("cogsSliderVal").innerHTML = money(display.cogs);
+  document.getElementById("laborSliderVal").innerHTML = money(display.labor);
+  document.getElementById("fixedSliderVal").innerHTML = money(display.fixed);
+  document.getElementById("profitSliderVal").innerHTML = money(display.ownerProfit);
 }
 
 function updateVariableCostDollarDisplays() {
   const label = timeframeLabel();
-  const displayRevenue = scaleForTimeframe(current.revenue);
+  const display = getDisplayFinancials();
+  const displayRevenue = display.netSales;
 
   const displayedFoodRevenue = displayRevenue * current.foodMix;
   const displayedBeverageRevenue = displayRevenue * (1 - current.foodMix);
 
   const displayedFoodCOGS = displayedFoodRevenue * current.foodCost;
   const displayedBeverageCOGS = displayedBeverageRevenue * current.bevCost;
-  const displayedBlendedCOGS = scaleForTimeframe(current.cogs);
+  const displayedBlendedCOGS = display.cogs;
 
-  const displayedBOH = scaleForTimeframe(current.bohPayroll);
-  const displayedFOHMin = scaleForTimeframe(current.fohMinLabor);
-  const displayedTips = scaleForTimeframe(current.tipsCollected);
-  const displayedSalesTax = scaleForTimeframe(current.salesTaxAmount);
-  const displayedPOSFees = scaleForTimeframe(current.posFees);
+  const displayedBOH = isYearlyView() ? current.bohPayroll * 12 : scaleForTimeframe(current.bohPayroll);
+  const displayedFOHMin = isYearlyView() ? current.fohMinLabor * 12 : scaleForTimeframe(current.fohMinLabor);
+  const displayedTips = display.tips;
+  const displayedSalesTax = display.salesTax;
+  const displayedPOSFees = display.posFees;
 
   document.getElementById("foodCostDollarVal").innerHTML = label + " COGS dollars: " + money(displayedBlendedCOGS) + " total | Food portion: " + money(displayedFoodCOGS);
   document.getElementById("bevCostDollarVal").innerHTML = label + " beverage COGS dollars: " + money(displayedBeverageCOGS);
@@ -574,7 +647,7 @@ function updateExplanations() {
 
   document.getElementById("explanations").innerHTML = `
     <h4>Selected Timeframe</h4>
-    <p>Current view = <b>${label}</b>. Monthly base values are multiplied by <b>${multiplier.toFixed(4)}</b>.</p>
+    <p>Current view = <b>${label}</b>. ${isYearlyView() ? "Yearly values use the total of all 12 seasonality factors, while fixed monthly costs repeat 12 times." : "Monthly base values are multiplied by <b>" + multiplier.toFixed(4) + "</b>."}</p>
 
     <h4>Total Seats</h4>
     <p>Seating capacity = <b>${current.seats}</b></p>
@@ -591,7 +664,7 @@ function updateExplanations() {
     <p>POS fees = ${money(current.grossRevenue)} × ${pct(current.posFeePct)} = <b>${money(current.posFees)}</b></p>
 
     <h4>${label} Displayed Net Sales</h4>
-    <p>${money(current.netSales)} monthly base × ${multiplier.toFixed(4)} = <b>${money(scaleForTimeframe(current.netSales))}</b></p>
+    <p>${isYearlyView() ? money(current.netSales) + " monthly base × total seasonality factor " + seasonFactorTotal().toFixed(2) + " = <b>" + money(getDisplayFinancials().netSales) + "</b>" : money(current.netSales) + " monthly base × " + multiplier.toFixed(4) + " = <b>" + money(scaleForTimeframe(current.netSales)) + "</b>"}</p>
 
     <h4>COGS</h4>
     <p>Blended COGS = (${pct(current.foodCost)} × ${pct(current.foodMix)}) + (${pct(current.bevCost)} × ${pct(1-current.foodMix)}) = <b>${pct(current.blendedCOGS)}</b></p>
@@ -607,30 +680,39 @@ function updateExplanations() {
 
     <h4>Owner Profit</h4>
     <p>Monthly base: ${money(current.netSales)} net sales - ${money(current.cogs)} COGS - ${money(current.cashLabor)} cash labor - ${money(current.fixed)} fixed costs - ${money(current.posFees)} POS fees = <b>${money(current.ownerProfit)}</b></p>
-    <p>${label} Owner Profit = <b>${money(scaleForTimeframe(current.ownerProfit))}</b></p>
+    <p>${label} Owner Profit = <b>${money(getDisplayFinancials().ownerProfit)}</b></p>
     <h4>Seasonality</h4>
     <p>Monthly seasonal net sales = Base Net Sales × Month Factor. Sales tax, gross revenue, POS fees, COGS, tips, labor, and profit then recalculate from seasonal net sales.</p>
   `;
 }
 
 function setRevenueFromSlider() {
-  const targetRevenue = monthlyFromTimeframe(val("revSlider"));
+  const targetRevenue = displayToMonthlyBaseAmount(val("revSlider"), "variable");
   current = getInputs();
 
-  const newAvgCheck = targetRevenue / (current.coversPerNight * current.days);
-  document.getElementById("avgCheck").value = newAvgCheck.toFixed(0);
+  const denominator = current.coversPerNight * current.days;
+  const newAvgCheck = denominator > 0 ? targetRevenue / denominator : 0;
+  document.getElementById("avgCheck").value = Math.max(0, newAvgCheck).toFixed(0);
   syncMoneySlider("avgCheck");
 
   calculate();
 }
 
 function setProfitFromSlider() {
-  const targetProfit = monthlyFromTimeframe(val("profitSlider"));
+  const targetProfitDisplay = val("profitSlider");
   current = getInputs();
 
   const fixedLabor = current.cashLabor;
   const variableRate = current.blendedCOGS + (current.posFeePct * (1 + current.salesTax));
-  let requiredRevenue = (targetProfit + current.fixed + fixedLabor) / (1 - variableRate);
+  let requiredRevenue;
+
+  if (isYearlyView()) {
+    const sf = seasonFactorTotal() || 12;
+    requiredRevenue = (targetProfitDisplay + (current.fixed + fixedLabor) * 12) / (sf * (1 - variableRate));
+  } else {
+    const targetProfit = monthlyFromTimeframe(targetProfitDisplay);
+    requiredRevenue = (targetProfit + current.fixed + fixedLabor) / (1 - variableRate);
+  }
 
   const newAvgCheck = requiredRevenue / (current.coversPerNight * current.days);
   document.getElementById("avgCheck").value = newAvgCheck.toFixed(0);
@@ -640,10 +722,10 @@ function setProfitFromSlider() {
 }
 
 function setCOGSFromSlider() {
-  const targetCOGS = monthlyFromTimeframe(val("cogsSlider"));
+  const targetCOGS = displayToMonthlyBaseAmount(val("cogsSlider"), "variable");
   current = getInputs();
 
-  const newBlendedCOGS = targetCOGS / current.revenue;
+  const newBlendedCOGS = current.revenue > 0 ? targetCOGS / current.revenue : 0;
   const newFoodCost = (newBlendedCOGS - (current.bevCost * (1 - current.foodMix))) / current.foodMix;
 
   document.getElementById("foodCost").value = Math.max(0, newFoodCost * 100).toFixed(1);
@@ -653,13 +735,21 @@ function setCOGSFromSlider() {
 }
 
 function setLaborFromSlider() {
-  const targetLabor = monthlyFromTimeframe(val("laborSlider"));
+  const targetLaborDisplay = val("laborSlider");
   current = getInputs();
 
   // Keep FOH minimum labor and tips percentage unchanged.
   // Adjust BOH fixed payroll to reach the selected displayed labor target based on the current tip-display switch.
-  const nonBOHDisplayedLabor = current.includeTips ? (current.fohMinLabor + current.tipsCollected) : current.fohMinLabor;
-  const requiredBOH = targetLabor - nonBOHDisplayedLabor;
+  let requiredBOH;
+  if (isYearlyView()) {
+    const seasonalTips = current.tipsCollected * seasonFactorTotal();
+    const nonBOHYearlyLabor = (current.fohMinLabor * 12) + (current.includeTips ? seasonalTips : 0);
+    requiredBOH = (targetLaborDisplay - nonBOHYearlyLabor) / 12;
+  } else {
+    const targetLabor = monthlyFromTimeframe(targetLaborDisplay);
+    const nonBOHDisplayedLabor = current.includeTips ? (current.fohMinLabor + current.tipsCollected) : current.fohMinLabor;
+    requiredBOH = targetLabor - nonBOHDisplayedLabor;
+  }
   document.getElementById("bohPayroll").value = Math.max(0, requiredBOH).toFixed(0);
   syncMoneySlider("bohPayroll");
 
@@ -667,7 +757,7 @@ function setLaborFromSlider() {
 }
 
 function setFixedFromSlider() {
-  const targetFixed = monthlyFromTimeframe(val("fixedSlider"));
+  const targetFixed = displayToMonthlyBaseAmount(val("fixedSlider"), "fixed");
   current = getInputs();
 
   const baseFixed = current.rent + current.utilities;
@@ -695,7 +785,7 @@ function drawCostChart(revenue, cogs, labor, fixed, posFees, salesTax, tips, pro
     ["Profit", profit, profit >= 0 ? "#2f855a" : "#c53030"]
   ];
 
-  const max = Math.max(...data.map(d => Math.abs(d[1])));
+  const max = Math.max(...data.map(d => Math.abs(d[1])), 1);
   const baseY = 260;
 
   ctx.font = "14px Arial";
@@ -727,43 +817,76 @@ function drawSeasonChart(baseRevenue, cogsPct, bohPayroll, fohMinLabor, tipsPct,
     const grossRevenue = rev + salesTaxAmount;
     const posFees = grossRevenue * posFeePct;
     const cogs = rev * cogsPct;
-    const tips = rev * tipsPct;
     const cashLabor = bohPayroll + fohMinLabor;
     // Seasonality chart shows true Owner Profit; tips are pass-through.
     return rev - cogs - cashLabor - fixedCosts - posFees;
   });
 
-  const max = Math.max(...profits.map(p => Math.abs(p)));
-  const baseY = 270;
+  const maxProfit = Math.max(...profits, 0);
+  const minProfit = Math.min(...profits, 0);
+  const maxAbs = Math.max(Math.abs(maxProfit), Math.abs(minProfit), 1);
+
+  const topPadding = 55;
+  const bottomPadding = 78;
+  const plotTop = topPadding;
+  const plotBottom = canvas.height - bottomPadding;
+  const plotHeight = plotBottom - plotTop;
+
+  // Center zero vertically so positive and negative bars are always visible.
+  const baseY = plotTop + (plotHeight / 2);
+  const halfHeight = plotHeight / 2 - 12;
+  const scale = halfHeight / maxAbs;
+
+  const yearlyOwnerProfit = profits.reduce((sum, value) => sum + value, 0);
 
   ctx.font = "14px Arial";
   ctx.fillStyle = "#222";
   ctx.fillText("Seasonality Owner Profit / Loss Projection", 30, 25);
 
-  ctx.strokeStyle = "#999";
+  ctx.font = "14px Arial";
+  ctx.fillStyle = yearlyOwnerProfit >= 0 ? "#2f855a" : "#c53030";
+  ctx.fillText("Yearly Owner Profit: " + money(yearlyOwnerProfit), 360, 25);
+
+  // Zero baseline
+  ctx.strokeStyle = "#444";
+  ctx.lineWidth = 1.5;
   ctx.beginPath();
   ctx.moveTo(30, baseY);
   ctx.lineTo(920, baseY);
   ctx.stroke();
 
+  // Small zero label for clarity
+  ctx.font = "11px Arial";
+  ctx.fillStyle = "#555";
+  ctx.fillText("$0", 32, baseY - 6);
+
   profits.forEach((profit, i) => {
     const x = 38 + i * 74;
-    const h = Math.abs(profit) / max * 190;
+    const h = Math.abs(profit) * scale;
     const y = profit >= 0 ? baseY - h : baseY;
     const meaning = getSeasonMeaning(seasonFactors[i]);
 
     ctx.fillStyle = profit >= 0 ? "#2f855a" : "#c53030";
     ctx.fillRect(x, y, 42, h);
 
+    // Month and factor labels remain below the chart area.
     ctx.fillStyle = "#222";
-    ctx.fillText(months[i], x, 305);
-    ctx.fillText(seasonFactors[i].toFixed(2), x, 323);
+    ctx.font = "14px Arial";
+    ctx.fillText(months[i], x, canvas.height - 42);
+    ctx.fillText(seasonFactors[i].toFixed(2), x, canvas.height - 24);
 
+    // Keep value labels inside the canvas and away from the month labels.
     ctx.fillStyle = meaning.color;
-    ctx.fillText(money(profit), x - 14, profit >= 0 ? y - 8 : y + h + 15);
+    ctx.font = "13px Arial";
+    let labelY;
+    if (profit >= 0) {
+      labelY = Math.max(plotTop + 12, y - 8);
+    } else {
+      labelY = Math.min(plotBottom - 8, y + h + 15);
+    }
+    ctx.fillText(money(profit), x - 14, labelY);
   });
 }
-
 
 function collectAppData() {
   const inputIds = [
@@ -834,7 +957,7 @@ function uploadData(event) {
       });
 
       if (data.seasonFactors.length === months.length) {
-        seasonFactors = data.seasonFactors.map(Number);
+        seasonFactors = data.seasonFactors.map(v => Math.max(0, Math.min(2, Number(v))));
       }
 
       buildSeasonControls();
