@@ -48,6 +48,8 @@
     .sliderSwitch:before { position:absolute; content:""; height:26px; width:26px; left:4px; bottom:4px; background:white; transition:.2s; border-radius:50%; }
     .switch input:checked + .sliderSwitch { background:var(--etna-red); }
     .switch input:checked + .sliderSwitch:before { transform:translateX(28px); }
+    .miniMoneyInput { width:100%; margin-top:6px; padding:10px 12px; border:1px solid #d8c3ad; border-radius:10px; font-size:16px; font-weight:bold; color:#7a1f16; background:#fffaf7; }
+    .miniMoneyInput:focus { outline:2px solid rgba(122,31,22,.25); border-color:#7a1f16; }
     img, svg, video { max-width:100%; height:auto; }
     @media (max-width:900px) { body { margin:14px; } .timeframeButtons { grid-template-columns:repeat(2,1fr); } button { width:100%; } .toggleBtn { width:auto; min-width:110px; } }
     @media (max-width:600px) { body { margin:10px; font-size:15px; } .grid,.flowGrid,.monthGrid { grid-template-columns:1fr; gap:12px; } .card { padding:14px; border-radius:14px; } .timeframeButtons { grid-template-columns:1fr 1fr; gap:8px; } button,.timeframeBtn,.toggleBtn { width:100%; min-height:48px; margin-top:8px; font-size:15px; } input[type="range"] { height:42px; } .sectionHeader { align-items:stretch; flex-direction:column; } .switchRow { flex-direction:column; align-items:stretch; } .switch { align-self:flex-end; } canvas { margin-top:14px; } #explanations { font-size:14px; } }
@@ -240,6 +242,7 @@ let selectedTimeframe = "month";
 
 const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 let seasonFactors = [1,1,1,0.95,0.75,0.60,0.55,0.55,0.60,0.65,0.80,1];
+let seasonLaborOverrides = Array(12).fill(null);
 
 function money(n) {
   return "$" + Math.round(n).toLocaleString();
@@ -301,6 +304,16 @@ function seasonFactorTotal() {
   return seasonFactors.reduce((sum, factor) => sum + Number(factor || 0), 0);
 }
 
+function getSeasonCashLabor(index) {
+  const override = seasonLaborOverrides[index];
+  if (override === null || override === undefined || isNaN(Number(override))) return current.cashLabor || 0;
+  return Math.max(0, Number(override));
+}
+
+function getYearlySeasonCashLabor() {
+  return months.reduce((sum, _m, i) => sum + getSeasonCashLabor(i), 0);
+}
+
 function isYearlyView() {
   return getTimeframe() === "year";
 }
@@ -335,7 +348,7 @@ function getDisplayFinancials() {
   const seasonalPOSFees = seasonalGrossRevenue * current.posFeePct;
   const seasonalCOGS = current.cogs * sf;
   const seasonalTips = current.tipsCollected * sf;
-  const yearlyCashLabor = current.cashLabor * 12;
+  const yearlyCashLabor = getYearlySeasonCashLabor();
   const yearlyFixed = current.fixed * 12;
   const yearlyLaborDisplay = current.includeTips ? yearlyCashLabor + seasonalTips : yearlyCashLabor;
   const yearlyStaffComp = yearlyCashLabor + seasonalTips;
@@ -421,7 +434,9 @@ function buildSeasonControls() {
         <div id="factorLabel${i}" class="seasonLabel" style="color:${meaning.color};">${meaning.text}</div>
         <div id="factorRevenue${i}" class="seasonLabel" style="color:#7a1f16; font-weight:bold; margin-top:6px;">Monthly Net Sales: --</div>
         <div id="factorCOGS${i}" class="seasonLabel" style="color:#d69e2e; font-weight:bold;">Monthly COGS: --</div>
-        <div id="factorLabor${i}" class="seasonLabel" style="color:#3182ce; font-weight:bold;">Monthly Labor: --</div>
+        <label class="seasonLabel" style="color:#3182ce; font-weight:bold; margin-top:8px;">Monthly Labor:</label>
+        <input id="factorLaborInput${i}" class="miniMoneyInput" type="number" min="0" step="1" inputmode="decimal" onchange="updateSeasonLaborOverride(${i})" oninput="updateSeasonLaborOverride(${i})">
+        <div id="factorLabor${i}" class="seasonLabel" style="color:#3182ce; font-weight:bold;">Using labor: --</div>
         <div id="factorFixed${i}" class="seasonLabel" style="color:#805ad5; font-weight:bold;">Monthly Fixed Cost: --</div>
         <div id="factorProfit${i}" class="seasonLabel" style="color:#2f855a; font-weight:bold;">Monthly Profit Target: --</div>
       </div>
@@ -441,6 +456,19 @@ function updateSeasonFactor(index) {
   calculate();
 }
 
+function updateSeasonLaborOverride(index) {
+  const input = document.getElementById("factorLaborInput" + index);
+  if (!input) return;
+  const raw = input.value;
+  if (raw === "") {
+    seasonLaborOverrides[index] = null;
+  } else {
+    seasonLaborOverrides[index] = Math.max(0, Number(raw) || 0);
+  }
+  updateSeasonRevenueDisplays();
+  calculate();
+}
+
 function updateSeasonRevenueDisplays() {
   if (!current || typeof current.netSales !== "number") return;
 
@@ -451,7 +479,7 @@ function updateSeasonRevenueDisplays() {
     const adjustedGrossRevenue = adjustedNetSales + adjustedSalesTax;
     const adjustedPOSFees = adjustedGrossRevenue * current.posFeePct;
     const adjustedTips = adjustedNetSales * current.tipsPct;
-    const monthlyCashLabor = current.cashLabor;
+    const monthlyCashLabor = getSeasonCashLabor(i);
     const displayedMonthlyLabor = current.includeTips ? monthlyCashLabor + adjustedTips : monthlyCashLabor;
     const monthlyFixedCost = current.fixed;
     const monthlyProfitTarget = adjustedNetSales - adjustedCOGS - monthlyCashLabor - monthlyFixedCost - adjustedPOSFees;
@@ -461,10 +489,15 @@ function updateSeasonRevenueDisplays() {
     const laborEl = document.getElementById("factorLabor" + i);
     const fixedEl = document.getElementById("factorFixed" + i);
     const profitEl = document.getElementById("factorProfit" + i);
+    const laborInputEl = document.getElementById("factorLaborInput" + i);
+
+    if (laborInputEl && document.activeElement !== laborInputEl) {
+      laborInputEl.value = Math.round(monthlyCashLabor);
+    }
 
     if (revenueEl) revenueEl.innerHTML = "Monthly Net Sales: " + money(adjustedNetSales);
     if (cogsEl) cogsEl.innerHTML = "Monthly COGS: " + money(adjustedCOGS);
-    if (laborEl) laborEl.innerHTML = "Monthly Labor: " + money(displayedMonthlyLabor);
+    if (laborEl) laborEl.innerHTML = (current.includeTips ? "Using labor + tips: " : "Using cash labor: ") + money(displayedMonthlyLabor);
     if (fixedEl) fixedEl.innerHTML = "Monthly Fixed Cost: " + money(monthlyFixedCost);
     if (profitEl) {
       profitEl.innerHTML = "Monthly Profit Target: " + money(monthlyProfitTarget);
@@ -706,7 +739,7 @@ function updateExplanations() {
     <p>Monthly base: ${money(current.netSales)} net sales - ${money(current.cogs)} COGS - ${money(current.cashLabor)} cash labor - ${money(current.fixed)} fixed costs - ${money(current.posFees)} POS fees = <b>${money(current.ownerProfit)}</b></p>
     <p>${label} Owner Profit = <b>${money(getDisplayFinancials().ownerProfit)}</b></p>
     <h4>Seasonality</h4>
-    <p>Monthly seasonal net sales = Base Net Sales × Month Factor. Sales tax, gross revenue, POS fees, COGS, tips, labor, and profit then recalculate from seasonal net sales.</p>
+    <p>Monthly seasonal net sales = Base Net Sales × Month Factor. COGS, tax, tips, and POS fees follow seasonal net sales. Monthly Labor can now be customized inside each month’s Seasonality card, and Owner Profit uses that month-specific labor value.</p>
   `;
 }
 
@@ -835,13 +868,13 @@ function drawSeasonChart(baseRevenue, cogsPct, bohPayroll, fohMinLabor, tipsPct,
   const ctx = canvas.getContext("2d");
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
-  const profits = seasonFactors.map(f => {
+  const profits = seasonFactors.map((f, i) => {
     const rev = baseRevenue * f;
     const salesTaxAmount = rev * salesTax;
     const grossRevenue = rev + salesTaxAmount;
     const posFees = grossRevenue * posFeePct;
     const cogs = rev * cogsPct;
-    const cashLabor = bohPayroll + fohMinLabor;
+    const cashLabor = getSeasonCashLabor(i);
     // Seasonality chart shows true Owner Profit; tips are pass-through.
     return rev - cogs - cashLabor - fixedCosts - posFees;
   });
@@ -931,7 +964,8 @@ function collectAppData() {
     timeframe: selectedTimeframe,
     includeTipsInLabor: includeTipsInLabor(),
     inputs: inputs,
-    seasonFactors: seasonFactors
+    seasonFactors: seasonFactors,
+    seasonLaborOverrides: seasonLaborOverrides
   };
 }
 
@@ -982,6 +1016,10 @@ function uploadData(event) {
 
       if (data.seasonFactors.length === months.length) {
         seasonFactors = data.seasonFactors.map(v => Math.max(0, Math.min(2, Number(v))));
+      }
+
+      if (Array.isArray(data.seasonLaborOverrides) && data.seasonLaborOverrides.length === months.length) {
+        seasonLaborOverrides = data.seasonLaborOverrides.map(v => (v === null || v === undefined || v === "") ? null : Math.max(0, Number(v) || 0));
       }
 
       buildSeasonControls();
